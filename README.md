@@ -1,24 +1,39 @@
-# Audio Scraper + Separation CLI
+# Audio Separation CLI
 
 Terminal-based Python pipeline that:
 
 1. asks for a YouTube URL,
 2. asks for a creation name,
-3. creates `./<creation_name>/`,
-4. downloads audio into that folder,
-5. separates and exports:
+3. creates a folder with that name under `outputs/`,
+4. downloads source audio,
+5. generates:
    - `<name>_vocals.mp3`
    - `<name>_kareoke.mp3`
 
-It uses [set-soft/AudioSeparation](https://github.com/set-soft/AudioSeparation) models via `tool/demix.py`.
+It uses vendored runtime files from `set-soft/AudioSeparation` (only required files, not full repo clone).
+
+## Project structure
+
+```text
+audio_scraper/
+├── app/
+│   ├── config.py
+│   └── pipeline.py
+├── vendor/
+│   └── audio_separation/      # minimal runtime subset (tool/, src/, models db)
+├── models/
+│   ├── MDX/
+│   └── Demucs/
+├── outputs/
+├── main.py
+└── requirements.txt
+```
 
 ## Prerequisites
 
 - Python 3.10+
 - `ffmpeg` on PATH
 - `git` on PATH
-- `torchcodec` Python package (included in `requirements.txt`)
-- `packaging` Python package (included in `requirements.txt`)
 
 ## Setup
 
@@ -36,18 +51,17 @@ source .venv/bin/activate
 python main.py
 ```
 
-## Model Directory Behavior
+## Model directory reference
 
-The script auto-detects models in this order:
+Default model directory is now local project path:
 
-1. `AUDIO_SEP_MODELS_DIR` (if set)
-2. `~/Documents/ComfyUI/models/audio/MDX`
-3. `~/Documents/ComfyUI/models`
+- `./models/MDX`
 
-If no directory is detected, `AudioSeparation` will download needed models into its own repo folder.
-If a directory is detected but one of the required models is missing, only the missing model is downloaded.
+Override (optional):
 
-## Notes
+- `AUDIO_SEP_MODELS_DIR=/absolute/path/to/models python main.py`
 
-- On first run, if `third_party/AudioSeparation` is missing, it is cloned automatically.
-- Output spelling follows your requirement: `kareoke`.
+The required model hashes remain:
+
+- vocals: `499a6a6bf9da6d330235a1576007ddc0` (`Kim_Vocal_2.safetensors`)
+- instrumental (used as kareoke): `a78fcc2e0ff8d575edd2c55add1eaa64` (`Kim_Inst.safetensors`)

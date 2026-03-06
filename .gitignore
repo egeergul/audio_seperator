@@ -1,5 +1,8 @@
 .venv/
 __pycache__/
 *.pyc
-third_party/
 *.DS_Store
+outputs/
+models/
+third_party/
+_archive_third_party/
