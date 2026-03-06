@@ -1,6 +1,6 @@
 # Audio Scraper CLI (Micro-Service Style)
 
-This project is a script-first audio pipeline with 5 independent CLI commands that hand off files by path.
+This project is a script-first audio pipeline with 6 independent CLI commands that hand off files by path.
 
 Canonical output root is:
 
@@ -33,6 +33,7 @@ python3 create_video_from_transcription.py \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
+python3 visualize_audio_wave.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
 ```
 
 ## Script Reference
@@ -213,6 +214,40 @@ Under the hood:
 - `services.video.build_ffmpeg_command`
 - `services.video.create_video_from_transcription`
 
+### 6) `visualize_audio_wave.py`
+
+Usage:
+
+```bash
+python3 visualize_audio_wave.py <audio_path> [--output-image-path <path>] [--width 1920] [--height 400]
+```
+
+Parameters:
+
+- `audio_path` (required): source audio file path (mp3/wav/etc. supported by ffmpeg).
+- `--output-image-path` (optional): explicit output PNG path.
+- `--width` (optional, default `1920`): output image width.
+- `--height` (optional, default `400`): output image height.
+- `--sample-rate` (optional, default `22050`): decode sample rate for waveform generation.
+- `--background-color` (optional, default `#0B1020`): image background color.
+- `--waveform-color` (optional, default `#38BDF8`): waveform color.
+- `--center-line-color` (optional, default `#1E293B`): center axis line color.
+
+Default output path:
+
+- `<audio_folder>/<audio_stem>_waveform.png` if `--output-image-path` is omitted.
+
+What it does:
+
+- Validates source file and `ffmpeg` availability.
+- Decodes source audio to mono PCM with ffmpeg.
+- Computes per-column amplitude envelope.
+- Renders a PNG waveform with Pillow.
+
+Under the hood:
+
+- `services.waveform.create_audio_waveform_image`
+
 ## Output File Contract
 
 Inside `.outputs/<run_name>/`:
@@ -222,6 +257,7 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_kareoke.mp3`
 - `<run_name>_transcription.json`
 - `<run_name>.mp4` (default)
+- `<audio_stem>_waveform.png` (when waveform visualization is used)
 
 ## Testing
 
@@ -230,10 +266,11 @@ There is currently no committed `tests/` directory in this checkout.
 Recommended smoke checks:
 
 ```bash
-python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py services/*.py services/video/*.py
+python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py visualize_audio_wave.py services/*.py services/video/*.py
 python3 create_folder.py --help
 python3 scrape_audio.py --help
 python3 seperate_audio.py --help
 python3 transcribe_audio.py --help
 python3 create_video_from_transcription.py --help
+python3 visualize_audio_wave.py --help
 ```

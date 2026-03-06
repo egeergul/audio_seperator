@@ -21,6 +21,7 @@ The project provides a file-handoff pipeline of independent scripts:
 3. Separate original audio into vocals + kareoke tracks.
 4. Transcribe vocals into millisecond chunks.
 5. Render MP4 with black background and timed captions, muxing kareoke audio.
+6. Optionally render a waveform PNG from any audio input.
 
 ## 3) Public CLI Contracts (Implemented)
 
@@ -148,6 +149,26 @@ Note:
 
 - `vocals_audio_path` is validated and stored in the spec, but kareoke path is the muxed audio input.
 
+### `visualize_audio_wave.py`
+
+Command:
+
+```bash
+python3 visualize_audio_wave.py <audio_path> [--output-image-path <path>] [--width 1920] [--height 400]
+```
+
+Behavior:
+
+- Validates source audio path and ffmpeg availability.
+- Decodes input audio to mono PCM (`s16le`) using ffmpeg.
+- Builds a per-column amplitude envelope and renders PNG with Pillow.
+- Default output path: `<audio_stem>_waveform.png` beside input audio.
+- Fails if output file already exists.
+
+Backed by:
+
+- `services.waveform.create_audio_waveform_image`
+
 ## 4) Data Contracts
 
 ### Run name derivation
@@ -164,6 +185,7 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_kareoke.mp3`
 - `<run_name>_transcription.json`
 - `<run_name>.mp4` (default video output)
+- `<audio_stem>_waveform.png` (optional waveform visualization output)
 
 ### Transcription JSON schema (ms)
 
@@ -215,6 +237,8 @@ Top-level scripts are thin CLI wrappers only.
   - separation prerequisites, demix orchestration, rename contract.
 - `services/transcription.py`
   - whisper loading, device selection, sentence chunking, ms conversion, JSON writing.
+- `services/waveform.py`
+  - ffmpeg decode + waveform envelope rendering to PNG.
 - `services/video/schema.py`
   - transcription JSON validation and caption item parsing.
 - `services/video/spec.py`
@@ -294,6 +318,7 @@ Notes:
 
 - `services.separation.check_separation_prerequisites` explicitly checks `ffmpeg`, `torchcodec`, `packaging`.
 - `services.video.check_video_prerequisites` checks `ffmpeg` and `ffprobe`.
+- `services.waveform.check_waveform_prerequisites` checks `ffmpeg`.
 
 ## 8) Repository Layout (Relevant)
 
@@ -307,6 +332,7 @@ audio_scraper/
 │   ├── download.py
 │   ├── separation.py
 │   ├── transcription.py
+│   ├── waveform.py
 │   └── video/
 │       ├── __init__.py
 │       ├── schema.py
@@ -319,6 +345,7 @@ audio_scraper/
 ├── seperate_audio.py
 ├── transcribe_audio.py
 ├── create_video_from_transcription.py
+├── visualize_audio_wave.py
 ├── vendor/audio_separation/
 ├── models/
 ├── .outputs/
@@ -347,6 +374,7 @@ python3 create_video_from_transcription.py \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
+python3 visualize_audio_wave.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
 ```
 
 ## 11) Recommendations for the Next Agent
@@ -357,3 +385,4 @@ python3 create_video_from_transcription.py \
 4. If changing demix invocation, validate both model hashes still produce `*_Vocals.mp3` and `*_Instrumental.mp3` source files before rename.
 5. Maintain `.outputs/` as canonical output root unless user requests a breaking change.
 6. Run compile/help smoke checks after behavior changes.
+7. For waveform changes, keep ffmpeg decode and Pillow render responsibilities in `services/waveform.py` (thin CLI wrapper only).
