@@ -53,6 +53,46 @@ source .venv/bin/activate
 python main.py
 ```
 
+## JSON To Video
+
+Create a lyric video from a JSON spec:
+
+```bash
+source .venv/bin/activate
+python video_from_json.py /path/to/spec.json
+```
+
+Expected JSON shape:
+
+```json
+{
+  "folder_path": "outputs/wild_flower",
+  "audio_file": "wild_flower_kareoke.mp3",
+  "video_width": 1920,
+  "video_height": 1080,
+  "output_video_path": "outputs/wild_flower/wild_flower.mp4",
+  "content": [
+    {
+      "start_time_ms": 0,
+      "end_time_ms": 10000,
+      "text": "Lyrics part 1"
+    },
+    {
+      "start_time_ms": 12500,
+      "end_time_ms": 15000,
+      "text": "Lyrics part 2"
+    }
+  ]
+}
+```
+
+Notes:
+
+- `output_video_path` is preferred; `video_path` is also supported.
+- `audio_file` is resolved relative to `folder_path` unless it is an absolute path.
+- Captions are centered and dynamically scaled to occupy most of the frame.
+- Output is black background video with timed lyrics and original audio.
+
 ## Model directory reference
 
 Default model directory is now local project path:
