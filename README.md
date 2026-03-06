@@ -1,5 +1,7 @@
 # Audio Separation CLI
 
+For agent-oriented project context and implementation history, see `AGENT_HANDOFF.md`.
+
 Terminal-based Python pipeline that:
 
 1. asks for a YouTube URL,
