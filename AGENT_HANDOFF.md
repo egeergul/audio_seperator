@@ -1,10 +1,10 @@
-# Agent Handoff: Audio Separation CLI
+# Agent Handoff: Audio Separation + JSON Video CLI
 
 This file is the project context summary for future AI agents.
 
-## 1) Project goal
+## 1) Project goals
 
-Build a terminal-based pipeline that:
+Build terminal-based tools that:
 
 1. asks user for a YouTube URL,
 2. asks user for a creation name,
@@ -13,6 +13,10 @@ Build a terminal-based pipeline that:
 5. separates audio into:
    - `<name>_vocals.mp3`
    - `<name>_kareoke.mp3`
+6. creates lyric videos from a JSON spec:
+   - black background video
+   - input audio track stitched into MP4
+   - timed caption overlays
 
 The spelling `kareoke` is intentional and required.
 
@@ -20,9 +24,10 @@ The spelling `kareoke` is intentional and required.
 
 Implemented and runnable.
 
-- Entry point: `main.py`
-- App logic: `app/pipeline.py`
+- Audio separation entry point: `main.py`
+- Audio separation app logic: `app/pipeline.py`
 - Config/constants: `app/config.py`
+- JSON video entry point: `video_from_json.py`
 - Models are expected locally in `models/MDX` by default.
 
 ## 3) Important historical decisions
@@ -63,6 +68,7 @@ audio_scraper/
 │   └── Demucs/
 ├── outputs/
 ├── main.py
+├── video_from_json.py
 ├── requirements.txt
 └── README.md
 ```
@@ -70,6 +76,8 @@ audio_scraper/
 Output runs go to: `outputs/<creation_name>/`
 
 ## 6) Runtime flow (current)
+
+### 6.1 Audio separation flow
 
 `run_cli()` in `app/pipeline.py`:
 
@@ -86,6 +94,22 @@ Output runs go to: `outputs/<creation_name>/`
     - `<name>_Vocals.mp3` -> `<name>_vocals.mp3`
     - `<name>_Instrumental.mp3` -> `<name>_kareoke.mp3`
 
+### 6.2 JSON video flow
+
+`run()` in `video_from_json.py`:
+
+1. Parse CLI arg (`python video_from_json.py /path/to/spec.json`).
+2. Validate spec JSON required keys and caption timing constraints.
+3. Check prerequisites (`ffmpeg`, `ffprobe`) and verify audio path exists.
+4. Probe audio duration via `ffprobe`.
+5. Render one transparent PNG overlay per caption item with centered text.
+6. Choose largest dynamic font size that fits most of frame area.
+7. Run one `ffmpeg` command:
+   - `color=black` base video with target width/height
+   - overlay PNG captions by `enable=between(t,start,end)`
+   - map audio + video to MP4 output
+8. Emit output video path on success.
+
 ## 7) Dependency notes (important)
 
 Current `requirements.txt` includes:
@@ -99,6 +123,7 @@ Current `requirements.txt` includes:
 - `tqdm`
 - `seconohe>=1.0.2`
 - `yt-dlp`
+- `Pillow`
 
 Why `torchcodec` and `packaging` matter:
 
@@ -106,17 +131,31 @@ Why `torchcodec` and `packaging` matter:
 - Missing `torchcodec` causes runtime crash in `torchaudio.load`.
 - `safetensors.torch` imports `packaging`; missing it crashes model load.
 
+Why `Pillow` matters:
+
+- `video_from_json.py` uses Pillow to render caption text overlays.
+- Missing `Pillow` prevents lyric video generation.
+
 ## 8) Known warnings / caveats
 
 - `yt-dlp` may warn about missing JS runtime for some YouTube extractions.
 - Current invalid-URL behavior: output folder may be created before download failure.
 - On first separation run for each model, runtime can be slow.
+- `video_from_json.py` requires a scalable TrueType font for large captions.
+- Output key in video JSON prefers `output_video_path` but supports `video_path` alias.
 
 ## 9) How to run
 
 ```bash
 source .venv/bin/activate
 python main.py
+```
+
+Lyric video from JSON:
+
+```bash
+source .venv/bin/activate
+python video_from_json.py /path/to/spec.json
 ```
 
 Optional model override:
@@ -131,3 +170,5 @@ AUDIO_SEP_MODELS_DIR=/absolute/path/to/mdx_models python main.py
 - Keep output naming contract unchanged unless user explicitly requests changes.
 - If changing backend files, ensure `vendor/audio_separation/models/uvr_model_data.json` remains compatible.
 - Do not reintroduce full repo clone flow unless explicitly requested.
+- Keep `video_from_json.py` JSON contract stable unless user asks otherwise.
+- Caption behavior is currently centered, high-visibility, and dynamically scaled by resolution.
