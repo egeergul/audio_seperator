@@ -1,0 +1,14 @@
+torch
+torchaudio
+torchcodec
+numpy
+safetensors
+packaging
+tqdm
+seconohe>=1.0.2
+yt-dlp
+
+
+
+
+
