@@ -1,4 +1,4 @@
-# Agent Handoff: Audio Separation + JSON Video CLI
+# Agent Handoff: Audio Separation + JSON Video + Whisper Transcription CLI
 
 This file is the project context summary for future AI agents.
 
@@ -17,6 +17,10 @@ Build terminal-based tools that:
    - black background video
    - input audio track stitched into MP4
    - timed caption overlays
+7. transcribes audio files (especially `*_vocals.mp3`) into timestamped JSON:
+   - `transcription.json` in the same folder as the source audio
+   - sentence-oriented timestamp chunks
+   - `transcription_for_video.json` compatible with `video_from_json.py`
 
 The spelling `kareoke` is intentional and required.
 
@@ -28,6 +32,8 @@ Implemented and runnable.
 - Audio separation app logic: `app/pipeline.py`
 - Config/constants: `app/config.py`
 - JSON video entry point: `video_from_json.py`
+- Whisper transcription entry point: `transcribe_audio.py`
+- Whisper transcription logic: `app/transcription.py`
 - Models are expected locally in `models/MDX` by default.
 
 ## 3) Important historical decisions
@@ -69,6 +75,7 @@ audio_scraper/
 ├── outputs/
 ├── main.py
 ├── video_from_json.py
+├── transcribe_audio.py
 ├── requirements.txt
 └── README.md
 ```
@@ -110,6 +117,24 @@ Output runs go to: `outputs/<creation_name>/`
    - map audio + video to MP4 output
 8. Emit output video path on success.
 
+### 6.3 Whisper transcription flow
+
+`run()` in `transcribe_audio.py`:
+
+1. Parse CLI args:
+   - required: `audio_path`
+   - optional: `--model` (default `small`), `--language`, `--device` (`auto|cpu|cuda`)
+2. Validate `audio_path` exists and is readable.
+3. Resolve runtime device (`auto` picks `cuda` if available, else `cpu`).
+4. Load Whisper model with `whisper.load_model(...)` (auto-download on first run).
+5. Run transcription with timestamps via `model.transcribe(...)`.
+6. Convert Whisper segments into sentence-like chunks:
+   - split text with punctuation (`.`, `!`, `?`) when possible
+   - proportionally allocate segment time across split sentences
+   - fallback to original segment if split is not reliable
+7. Write `transcription.json` next to the input audio.
+8. Build and write `transcription_for_video.json` in `video_from_json.py` format.
+
 ## 7) Dependency notes (important)
 
 Current `requirements.txt` includes:
@@ -124,6 +149,7 @@ Current `requirements.txt` includes:
 - `seconohe>=1.0.2`
 - `yt-dlp`
 - `Pillow`
+- `openai-whisper`
 
 Why `torchcodec` and `packaging` matter:
 
@@ -136,11 +162,18 @@ Why `Pillow` matters:
 - `video_from_json.py` uses Pillow to render caption text overlays.
 - Missing `Pillow` prevents lyric video generation.
 
+Why `openai-whisper` matters:
+
+- `transcribe_audio.py` and `app/transcription.py` import Whisper runtime.
+- Missing `openai-whisper` prevents model load/transcription.
+
 ## 8) Known warnings / caveats
 
 - `yt-dlp` may warn about missing JS runtime for some YouTube extractions.
 - Current invalid-URL behavior: output folder may be created before download failure.
 - On first separation run for each model, runtime can be slow.
+- On first transcription run for each Whisper model, model download can take time.
+- CPU transcription can be significantly slower than CUDA-enabled runs.
 - `video_from_json.py` requires a scalable TrueType font for large captions.
 - Output key in video JSON prefers `output_video_path` but supports `video_path` alias.
 
@@ -164,6 +197,13 @@ Optional model override:
 AUDIO_SEP_MODELS_DIR=/absolute/path/to/mdx_models python main.py
 ```
 
+Transcription from audio:
+
+```bash
+source .venv/bin/activate
+python3 transcribe_audio.py /path/to/file_vocals.mp3
+```
+
 ## 10) Guidance for future agents
 
 - Prefer keeping `app/config.py` as source of truth for paths and model hashes.
@@ -171,4 +211,5 @@ AUDIO_SEP_MODELS_DIR=/absolute/path/to/mdx_models python main.py
 - If changing backend files, ensure `vendor/audio_separation/models/uvr_model_data.json` remains compatible.
 - Do not reintroduce full repo clone flow unless explicitly requested.
 - Keep `video_from_json.py` JSON contract stable unless user asks otherwise.
+- Keep `transcribe_audio.py` output filename contract stable (`transcription.json` in input folder) unless user asks otherwise.
 - Caption behavior is currently centered, high-visibility, and dynamically scaled by resolution.

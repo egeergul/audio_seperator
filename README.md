@@ -93,6 +93,46 @@ Notes:
 - Captions are centered and dynamically scaled to occupy most of the frame.
 - Output is black background video with timed lyrics and original audio.
 
+## Transcribe Vocals (Whisper)
+
+Generate two files next to an audio file:
+
+- `transcription.json`
+- `transcription_for_video.json` (compatible with `video_from_json.py`)
+
+```bash
+source .venv/bin/activate
+python3 transcribe_audio.py /path/to/file_vocals.mp3
+```
+
+Optional flags:
+
+- `--model` (default: `small`)
+- `--language` (force language code, e.g. `en`, `tr`)
+- `--device` (`auto`, `cpu`, `cuda`; default: `auto`)
+
+Output JSON shape:
+
+```json
+{
+  "source_audio": "/abs/path/to/file_vocals.mp3",
+  "model": "small",
+  "language": "en",
+  "duration_seconds": 202.0,
+  "created_at": "2026-03-06T21:49:34.472838+00:00",
+  "chunks": [
+    { "index": 0, "start": 0.0, "end": 2.0, "text": "Sentence one." },
+    { "index": 1, "start": 2.0, "end": 5.4, "text": "Sentence two." }
+  ]
+}
+```
+
+Notes:
+
+- Both JSON files are always written to the same folder as the input audio.
+- Segments are sentence-oriented when punctuation (`.`, `!`, `?`) is available.
+- Whisper model files are auto-downloaded on first use.
+
 ## Model directory reference
 
 Default model directory is now local project path:
