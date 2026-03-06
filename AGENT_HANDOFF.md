@@ -1,143 +1,263 @@
-# Agent Handoff: Audio Separation + JSON Video + Whisper Transcription CLI
+# Agent Handoff: Audio Scraper Micro-Service Refactor
 
-This file is the project context summary for future AI agents.
+This document is the single-source context file for future AI agents. It is written so an agent can continue work without re-exploring the repository.
 
-## 1) Project goals
+## 1) Current Snapshot
 
-Build terminal-based tools that:
+- Repository root: `audio_scraper/`
+- Refactor status: micro-service CLI split is implemented in code.
+- Canonical output root is `.outputs/` (hidden).
+- Spelling contract `kareoke` is intentionally preserved across scripts and outputs.
+- Legacy interactive orchestrator (`main.py`) is removed from the staged refactor.
+- Legacy JSON-video entry script (`video_from_json.py`) has been moved into `app/video.py` service logic and replaced by `create_video_from_transcription.py` CLI.
+- Current test suite: `18` tests, all passing with `python3 -m unittest discover -s tests -p 'test_*.py'`.
 
-1. asks user for a YouTube URL,
-2. asks user for a creation name,
-3. creates an output folder for that run,
-4. downloads source audio from YouTube,
-5. separates audio into:
-   - `<name>_vocals.mp3`
-   - `<name>_kareoke.mp3`
-6. creates lyric videos from a JSON spec:
-   - black background video
-   - input audio track stitched into MP4
-   - timed caption overlays
-7. transcribes audio files (especially `*_vocals.mp3`) into timestamped JSON:
-   - `transcription.json` in the same folder as the source audio
-   - sentence-oriented timestamp chunks
-   - `transcription_for_video.json` compatible with `video_from_json.py`
+## 2) Project Goals
 
-The spelling `kareoke` is intentional and required.
+The project provides a file-handoff pipeline of independent scripts:
 
-## 2) Current implementation status
+1. Create a normalized run folder.
+2. Download YouTube audio into that run folder.
+3. Separate original audio into vocals + kareoke tracks.
+4. Transcribe vocals into millisecond chunks.
+5. Render MP4 with black background and timed captions, muxing kareoke audio.
 
-Implemented and runnable.
+## 3) Public CLI Contracts (Implemented)
 
-- Audio separation entry point: `main.py`
-- Audio separation app logic: `app/pipeline.py`
-- Config/constants: `app/config.py`
-- JSON video entry point: `video_from_json.py`
-- Whisper transcription entry point: `transcribe_audio.py`
-- Whisper transcription logic: `app/transcription.py`
-- Models are expected locally in `models/MDX` by default.
+### `create_folder.py`
 
-## 3) Important historical decisions
+Command:
 
-- We no longer clone full `set-soft/AudioSeparation` at runtime.
-- We vendor only needed runtime files under `vendor/audio_separation`.
-- Previous `third_party` clone was removed from active project usage.
-- Pipeline runs AudioSeparation `demix.py` twice (vocals + instrumental hash), then renames outputs.
-- We do **not** use `--save_complement`.
-
-## 4) Audio separation backend details
-
-Vendored subset location: `vendor/audio_separation/`
-
-Kept files/folders:
-
-- `tool/demix.py`
-- `tool/bootstrap/`
-- `src/` (runtime modules used by demix)
-- `models/uvr_model_data.json`
-- `LICENSE`
-
-Model hashes in use:
-
-- Vocals: `499a6a6bf9da6d330235a1576007ddc0` (`Kim_Vocal_2.safetensors`)
-- Instrumental (for kareoke): `a78fcc2e0ff8d575edd2c55add1eaa64` (`Kim_Inst.safetensors`)
-
-## 5) Folder conventions
-
-Current project layout:
-
-```text
-audio_scraper/
-├── app/
-├── vendor/audio_separation/
-├── models/
-│   ├── MDX/
-│   └── Demucs/
-├── outputs/
-├── main.py
-├── video_from_json.py
-├── transcribe_audio.py
-├── requirements.txt
-└── README.md
+```bash
+python3 create_folder.py <name>
 ```
 
-Output runs go to: `outputs/<creation_name>/`
+Behavior:
 
-## 6) Runtime flow (current)
+- Sanitizes `<name>` with regex `[^A-Za-z0-9._-]+ -> _`, then trims leading/trailing `._-`.
+- Fails if sanitized name is empty.
+- Creates `.outputs/<normalized_name>`.
+- Fails if target folder already exists.
+- Prints absolute created folder path.
 
-### 6.1 Audio separation flow
+Backed by:
 
-`run_cli()` in `app/pipeline.py`:
+- `app.pipeline.sanitize_creation_name`
+- `app.pipeline.create_run_folder`
+- `app.pipeline.create_normalized_run_folder`
 
-1. Check prerequisites (`git`, `ffmpeg`, `torchcodec`, `packaging`).
-2. Verify vendored runtime files exist.
-3. Prompt URL + creation name.
-4. Sanitize name for filesystem safety.
-5. Create `outputs/<name>/`.
-6. Download YouTube audio as `source_audio.wav` via `yt-dlp`.
-7. Resolve model directory (default `models/MDX`, optional env override).
-8. Run `demix.py` with vocals hash.
-9. Run `demix.py` with instrumental hash.
-10. Rename:
-    - `<name>_Vocals.mp3` -> `<name>_vocals.mp3`
-    - `<name>_Instrumental.mp3` -> `<name>_kareoke.mp3`
+### `scrape_audio.py`
 
-### 6.2 JSON video flow
+Command:
 
-`run()` in `video_from_json.py`:
+```bash
+python3 scrape_audio.py <youtube_url> <output_folder_path>
+```
 
-1. Parse CLI arg (`python video_from_json.py /path/to/spec.json`).
-2. Validate spec JSON required keys and caption timing constraints.
-3. Check prerequisites (`ffmpeg`, `ffprobe`) and verify audio path exists.
-4. Probe audio duration via `ffprobe`.
-5. Render one transparent PNG overlay per caption item with centered text.
-6. Choose largest dynamic font size that fits most of frame area.
-7. Run one `ffmpeg` command:
-   - `color=black` base video with target width/height
-   - overlay PNG captions by `enable=between(t,start,end)`
-   - map audio + video to MP4 output
-8. Emit output video path on success.
+Behavior:
 
-### 6.3 Whisper transcription flow
+- Validates URL is non-empty.
+- Validates output folder exists and is a directory.
+- Derives `run_name` from folder basename.
+- Downloads and extracts audio via `yt-dlp` to `<run_name>_original.mp3`.
+- Fails if expected MP3 does not exist after download.
+- Prints absolute output audio path.
 
-`run()` in `transcribe_audio.py`:
+Backed by:
 
-1. Parse CLI args:
-   - required: `audio_path`
-   - optional: `--model` (default `small`), `--language`, `--device` (`auto|cpu|cuda`)
-2. Validate `audio_path` exists and is readable.
-3. Resolve runtime device (`auto` picks `cuda` if available, else `cpu`).
-4. Load Whisper model with `whisper.load_model(...)` (auto-download on first run).
-5. Run transcription with timestamps via `model.transcribe(...)`.
-6. Convert Whisper segments into sentence-like chunks:
-   - split text with punctuation (`.`, `!`, `?`) when possible
-   - proportionally allocate segment time across split sentences
-   - fallback to original segment if split is not reliable
-7. Write `transcription.json` next to the input audio.
-8. Build and write `transcription_for_video.json` in `video_from_json.py` format.
+- `app.pipeline.download_youtube_audio`
 
-## 7) Dependency notes (important)
+### `seperate_audio.py`
 
-Current `requirements.txt` includes:
+Command:
+
+```bash
+python3 seperate_audio.py <original_file_path>
+```
+
+Behavior:
+
+- Validates input file exists and is readable.
+- Derives `run_name` from parent folder basename.
+- Runs vendor demix twice:
+  - vocals hash: `499a6a6bf9da6d330235a1576007ddc0`
+  - instrumental hash: `a78fcc2e0ff8d575edd2c55add1eaa64`
+- Renames vendor outputs to:
+  - `<run_name>_vocals.mp3`
+  - `<run_name>_kareoke.mp3`
+- Prints both output paths.
+
+Backed by:
+
+- `app.pipeline.seperate_audio`
+- `app.pipeline.run_demix`
+- `app.pipeline.rename_outputs_to_required_names`
+
+### `transcribe_audio.py`
+
+Command:
+
+```bash
+python3 transcribe_audio.py <vocals_audio_path> [--model ...] [--language ...] [--device auto|cpu|cuda]
+```
+
+Supported models:
+
+- `tiny`, `tiny.en`, `base`, `base.en`, `small`, `small.en`, `medium`, `medium.en`, `large`, `large-v1`, `large-v2`, `large-v3`, `turbo`
+
+Behavior:
+
+- Validates input audio file exists/readable.
+- Resolves device (`auto` => `cuda` if available else `cpu`).
+- Runs Whisper transcription.
+- Splits to sentence chunks and converts timing to ms.
+- Writes only `<run_name>_transcription.json` in same folder.
+- Does **not** generate `transcription_for_video.json`.
+
+Backed by:
+
+- `app.transcription.transcribe_audio`
+- `app.transcription.segments_to_sentence_chunks_ms`
+- `app.transcription.write_transcription_json`
+
+### `create_video_from_transcription.py`
+
+Command:
+
+```bash
+python3 create_video_from_transcription.py <transcription_json_path> <vocals_audio_path> <kareoke_audio_path> [--width 1920] [--height 1080] [--output-video-path <path>]
+```
+
+Behavior:
+
+- Validates transcription JSON format against ms-chunk schema.
+- Validates both audio paths are readable.
+- Uses `kareoke_audio_path` as muxed output audio track.
+- Uses chunk `start_time_ms`/`end_time_ms` to build ffmpeg overlay windows.
+- Default output path: `<run_name>.mp4` beside transcription file.
+- Generates black background + centered dynamic captions rendered via Pillow.
+
+Backed by:
+
+- `app.video.build_video_spec`
+- `app.video.load_transcription_chunks`
+- `app.video.create_video_from_transcription`
+- `app.video.build_ffmpeg_command`
+
+Note:
+
+- `vocals_audio_path` is currently validated and stored in spec, but kareoke path is the muxed audio input.
+
+## 4) Data Contracts
+
+### Run name derivation
+
+- Run name always comes from parent folder basename.
+- This applies to download output names, separation outputs, transcription output name, and default video output name.
+
+### Output naming contract
+
+Inside `.outputs/<run_name>/`:
+
+- `<run_name>_original.mp3`
+- `<run_name>_vocals.mp3`
+- `<run_name>_kareoke.mp3`
+- `<run_name>_transcription.json`
+- `<run_name>.mp4` (default video output)
+
+### Transcription JSON schema (ms)
+
+Produced by `transcribe_audio.py` and consumed by `create_video_from_transcription.py`:
+
+```json
+{
+  "source_audio": "/abs/path/to/<run_name>_vocals.mp3",
+  "model": "small",
+  "language": "en",
+  "duration_ms": 123456,
+  "created_at": "2026-03-07T00:00:00+00:00",
+  "chunks": [
+    {
+      "index": 0,
+      "start_time_ms": 0,
+      "end_time_ms": 1500,
+      "text": "Line"
+    }
+  ]
+}
+```
+
+Validation rules in `app.video.load_transcription_chunks`:
+
+- top-level object with `chunks` list
+- each chunk is object
+- `start_time_ms` non-negative int
+- `end_time_ms` non-negative int
+- `start_time_ms < end_time_ms`
+- `text` non-empty string
+
+## 5) Architecture and Code Map
+
+Top-level scripts are thin CLI wrappers only.
+
+### Service modules
+
+- `app/config.py`
+  - source of truth for project paths and model hashes.
+  - `OUTPUTS_DIR = PROJECT_ROOT / ".outputs"`
+- `app/pipeline.py`
+  - folder creation, name sanitation, download, separation orchestration.
+- `app/transcription.py`
+  - whisper loading, device selection, sentence chunking, ms conversion, JSON writing.
+- `app/video.py`
+  - transcription schema validation, video spec construction, caption rendering, ffmpeg command generation, video creation.
+
+### Vendor integration boundary
+
+- Demix entrypoint invoked by project code:
+  - `vendor/audio_separation/tool/demix.py`
+- Called through:
+  - `app.pipeline.run_demix(...)`
+- Working directory for invocation:
+  - `vendor/audio_separation`
+
+## 6) Vendored Audio Separation Runtime Details
+
+Used runtime subset lives under `vendor/audio_separation/`.
+
+Critical files for CLI demix path:
+
+- `tool/demix.py`
+- `tool/bootstrap/__init__.py`
+- `src/nodes/...` (db, inference, utils)
+- `models/uvr_model_data.json`
+
+Demix CLI arguments currently passed by project:
+
+- `-m <model_hash>`
+- `--out_base <run_dir>/<run_name>`
+- `--format mp3`
+- `--models_dir <resolved_models_dir>`
+- `<input_audio>`
+
+Project intentionally does **not** pass `--save_complement`; it runs demix twice for explicit model hashes.
+
+### Model location behavior
+
+- Default model folder: `models/MDX`
+- Override with env var `AUDIO_SEP_MODELS_DIR`
+- If default folder missing, it is created.
+
+Known local model cache files currently in repo working tree:
+
+- `models/MDX/Kim_Vocal_2.safetensors`
+- `models/MDX/Kim_Inst.safetensors`
+- `models/Demucs/htdemucs_ft.safetensors`
+- catalog files in `models/*/.catalog.csv` include hashes.
+
+## 7) Dependencies and Runtime Requirements
+
+From `requirements.txt`:
 
 - `torch`
 - `torchaudio`
@@ -151,65 +271,97 @@ Current `requirements.txt` includes:
 - `Pillow`
 - `openai-whisper`
 
-Why `torchcodec` and `packaging` matter:
+System tools required:
 
-- `torchaudio` in this environment uses TorchCodec backend for load/save.
-- Missing `torchcodec` causes runtime crash in `torchaudio.load`.
-- `safetensors.torch` imports `packaging`; missing it crashes model load.
+- `ffmpeg`
+- `ffprobe`
 
-Why `Pillow` matters:
+Notes:
 
-- `video_from_json.py` uses Pillow to render caption text overlays.
-- Missing `Pillow` prevents lyric video generation.
+- `app.pipeline.check_separation_prerequisites` explicitly checks `ffmpeg`, `torchcodec`, `packaging`.
+- `app.video.check_video_prerequisites` checks `ffmpeg` and `ffprobe`.
 
-Why `openai-whisper` matters:
+## 8) Tests and What They Cover
 
-- `transcribe_audio.py` and `app/transcription.py` import Whisper runtime.
-- Missing `openai-whisper` prevents model load/transcription.
+All tests live under `tests/` and currently pass.
 
-## 8) Known warnings / caveats
+- `test_pipeline_services.py`
+  - name sanitization
+  - `.outputs` folder contract
+  - yt-dlp command shape
+  - demix command parameters
+  - dual-hash separation orchestration + rename contract
+- `test_transcription_services.py`
+  - sentence chunk conversion to ms fields
+  - transcription output naming contract
+- `test_video_services.py`
+  - transcription JSON schema validation
+  - default output path derivation
+  - ffmpeg filter timing generation from ms chunks
+- `test_cli.py`
+  - `--help` and missing args behavior for all 5 scripts
+  - invalid-path and invalid-json CLI error paths
+- `test_e2e_dry_pipeline.py`
+  - mocked end-to-end handoff sequence across all stages
 
-- `yt-dlp` may warn about missing JS runtime for some YouTube extractions.
-- Current invalid-URL behavior: output folder may be created before download failure.
-- On first separation run for each model, runtime can be slow.
-- On first transcription run for each Whisper model, model download can take time.
-- CPU transcription can be significantly slower than CUDA-enabled runs.
-- `video_from_json.py` requires a scalable TrueType font for large captions.
-- Output key in video JSON prefers `output_video_path` but supports `video_path` alias.
-
-## 9) How to run
-
-```bash
-source .venv/bin/activate
-python main.py
-```
-
-Lyric video from JSON:
-
-```bash
-source .venv/bin/activate
-python video_from_json.py /path/to/spec.json
-```
-
-Optional model override:
+Run command:
 
 ```bash
-AUDIO_SEP_MODELS_DIR=/absolute/path/to/mdx_models python main.py
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Transcription from audio:
+## 9) Repository Layout (Relevant)
+
+```text
+audio_scraper/
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── pipeline.py
+│   ├── transcription.py
+│   └── video.py
+├── create_folder.py
+├── scrape_audio.py
+├── seperate_audio.py
+├── transcribe_audio.py
+├── create_video_from_transcription.py
+├── tests/
+├── vendor/audio_separation/
+├── models/
+├── .outputs/
+├── requirements.txt
+├── README.md
+└── AGENT_HANDOFF.md
+```
+
+## 10) Known Caveats and Design Constraints
+
+- `kareoke` spelling is intentional contract; do not normalize to `karaoke` unless explicitly requested.
+- No overwrite mode: scripts fail on conflicting targets.
+- `create_video_from_transcription.py` requires both vocals and kareoke args by contract even though kareoke is muxed audio source.
+- Whisper model downloads can cause first-run latency.
+- Separation first-run latency can be high depending on model availability and hardware.
+- Caption rendering needs a scalable TTF font (`DejaVuSans-Bold.ttf` or macOS Arial fallback paths).
+
+## 11) Practical Command Sequence
 
 ```bash
-source .venv/bin/activate
-python3 transcribe_audio.py /path/to/file_vocals.mp3
+python3 create_folder.py "Wild Flower"
+python3 scrape_audio.py "https://youtube.com/watch?v=..." "/abs/path/to/.outputs/Wild_Flower"
+python3 seperate_audio.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_original.mp3"
+python3 transcribe_audio.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
+python3 create_video_from_transcription.py \
+  "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
+  "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" \
+  "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 ```
 
-## 10) Guidance for future agents
+## 12) Recommendations for the Next Agent
 
-- Prefer keeping `app/config.py` as source of truth for paths and model hashes.
-- Keep output naming contract unchanged unless user explicitly requests changes.
-- If changing backend files, ensure `vendor/audio_separation/models/uvr_model_data.json` remains compatible.
-- Do not reintroduce full repo clone flow unless explicitly requested.
-- Keep `video_from_json.py` JSON contract stable unless user asks otherwise.
-- Keep `transcribe_audio.py` output filename contract stable (`transcription.json` in input folder) unless user asks otherwise.
-- Caption behavior is currently centered, high-visibility, and dynamically scaled by resolution.
+1. Preserve service-layer boundaries (`app/pipeline.py`, `app/transcription.py`, `app/video.py`) and keep top-level scripts thin.
+2. Keep `app/config.py` as the only path/hash constants source.
+3. If modifying transcription schema, update both producer (`app/transcription.py`) and validator/consumer (`app/video.py`) and then update tests.
+4. If changing demix invocation, validate both model hashes still produce `*_Vocals.mp3` and `*_Instrumental.mp3` source files before rename.
+5. Maintain `.outputs/` as canonical output root unless user requests a breaking change.
+6. Run unit tests after any behavior change.
+

@@ -1,43 +1,19 @@
-# Audio Separation CLI
+# Audio Scraper CLI (Micro-Service Style)
 
-For agent-oriented project context and implementation history, see `AGENT_HANDOFF.md`.
+This project is a script-first audio pipeline with 5 independent CLI commands that hand off files by path.
 
-Terminal-based Python pipeline that:
+Canonical output root is:
 
-1. asks for a YouTube URL,
-2. asks for a creation name,
-3. creates a folder with that name under `outputs/`,
-4. downloads source audio,
-5. generates:
-   - `<name>_vocals.mp3`
-   - `<name>_kareoke.mp3`
+- `.outputs/`
 
-It uses vendored runtime files from `set-soft/AudioSeparation` (only required files, not full repo clone).
+The `kareoke` spelling is intentional and part of the file contract.
 
-## Project structure
-
-```text
-audio_scraper/
-├── app/
-│   ├── config.py
-│   └── pipeline.py
-├── vendor/
-│   └── audio_separation/      # minimal runtime subset (tool/, src/, models db)
-├── models/
-│   ├── MDX/
-│   └── Demucs/
-├── outputs/
-├── main.py
-└── requirements.txt
-```
-
-## Prerequisites
+## Requirements
 
 - Python 3.10+
-- `ffmpeg` on PATH
-- `git` on PATH
+- `ffmpeg` and `ffprobe` on `PATH`
 
-## Setup
+Install Python dependencies:
 
 ```bash
 python3 -m venv .venv
@@ -46,104 +22,221 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Run
+## Quick Start (End-to-End)
 
 ```bash
-source .venv/bin/activate
-python main.py
+python3 create_folder.py "Wild Flower"
+python3 scrape_audio.py "https://youtube.com/watch?v=..." "/absolute/path/to/.outputs/Wild_Flower"
+python3 seperate_audio.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_original.mp3"
+python3 transcribe_audio.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
+python3 create_video_from_transcription.py \
+  "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
+  "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" \
+  "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 ```
 
-## JSON To Video
+## Script Reference
 
-Create a lyric video from a JSON spec:
+### 1) `create_folder.py`
+
+Usage:
 
 ```bash
-source .venv/bin/activate
-python video_from_json.py /path/to/spec.json
+python3 create_folder.py <name>
 ```
 
-Expected JSON shape:
+Parameters:
+
+- `name` (required): raw run name.
+
+What it does:
+
+- Normalizes name with `[^A-Za-z0-9._-] -> _` and trims leading/trailing `._-`.
+- Creates `.outputs/<normalized_name>`.
+- Fails if name becomes empty after sanitization or folder already exists.
+- Prints the absolute created path.
+
+Under the hood:
+
+- Uses `app.pipeline.create_normalized_run_folder`.
+- Path constants come from `app/config.py` (`OUTPUTS_DIR`).
+
+### 2) `scrape_audio.py`
+
+Usage:
+
+```bash
+python3 scrape_audio.py <youtube_url> <output_folder_path>
+```
+
+Parameters:
+
+- `youtube_url` (required): YouTube video URL.
+- `output_folder_path` (required): existing run folder path.
+
+What it does:
+
+- Validates non-empty URL and existing output folder.
+- Derives `run_name` from folder basename.
+- Downloads/extracts audio to:
+  - `<output_folder_path>/<run_name>_original.mp3`
+- Fails if expected output file is missing after download.
+
+Under the hood:
+
+- Calls `yt-dlp` through `python -m yt_dlp --no-playlist -x --audio-format mp3`.
+- Implemented in `app.pipeline.download_youtube_audio`.
+
+### 3) `seperate_audio.py`
+
+Usage:
+
+```bash
+python3 seperate_audio.py <original_file_path>
+```
+
+Parameters:
+
+- `original_file_path` (required): readable source file, usually `<run_name>_original.mp3`.
+
+What it does:
+
+- Validates source file exists/readable.
+- Derives `run_name` from parent folder name.
+- Runs demix twice with fixed model hashes:
+  - vocals: `499a6a6bf9da6d330235a1576007ddc0`
+  - instrumental: `a78fcc2e0ff8d575edd2c55add1eaa64`
+- Writes in same folder:
+  - `<run_name>_vocals.mp3`
+  - `<run_name>_kareoke.mp3`
+
+Under the hood:
+
+- Invokes vendored runtime `vendor/audio_separation/tool/demix.py` twice.
+- Uses `--out_base <run_dir>/<run_name> --format mp3 --models_dir <...>`.
+- Renames vendor outputs (`*_Vocals.mp3`, `*_Instrumental.mp3`) to required lowercase contract.
+
+Model directory behavior:
+
+- Default: `models/MDX`
+- Optional override: `AUDIO_SEP_MODELS_DIR=/abs/path/to/models`
+
+### 4) `transcribe_audio.py`
+
+Usage:
+
+```bash
+python3 transcribe_audio.py <vocals_audio_path> [--model ...] [--language ...] [--device auto|cpu|cuda]
+```
+
+Parameters:
+
+- `vocals_audio_path` (required): input vocals audio path.
+- `--model` (optional, default `small`):
+  - `tiny`, `tiny.en`, `base`, `base.en`, `small`, `small.en`, `medium`, `medium.en`, `large`, `large-v1`, `large-v2`, `large-v3`, `turbo`
+- `--language` (optional): language code like `en`, `tr`. Omit for auto-detect.
+- `--device` (optional, default `auto`): `auto`, `cpu`, `cuda`.
+
+What it does:
+
+- Runs Whisper transcription.
+- Applies sentence chunking logic.
+- Converts all chunk times to milliseconds.
+- Writes:
+  - `<run_name>_transcription.json`
+- Does not create `transcription_for_video.json`.
+
+Under the hood:
+
+- `app.transcription.transcribe_audio` runs Whisper and builds payload.
+- `app.transcription.segments_to_sentence_chunks_ms` handles punctuation-based split + proportional timing.
+- `app.transcription.write_transcription_json` writes next to input audio.
+
+Output schema:
 
 ```json
 {
-  "folder_path": "outputs/wild_flower",
-  "audio_file": "wild_flower_kareoke.mp3",
-  "video_width": 1920,
-  "video_height": 1080,
-  "output_video_path": "outputs/wild_flower/wild_flower.mp4",
-  "content": [
+  "source_audio": "/abs/path/to/<run_name>_vocals.mp3",
+  "model": "small",
+  "language": "en",
+  "duration_ms": 123456,
+  "created_at": "2026-03-07T00:00:00+00:00",
+  "chunks": [
     {
+      "index": 0,
       "start_time_ms": 0,
-      "end_time_ms": 10000,
-      "text": "Lyrics part 1"
-    },
-    {
-      "start_time_ms": 12500,
-      "end_time_ms": 15000,
-      "text": "Lyrics part 2"
+      "end_time_ms": 1500,
+      "text": "Lyric line"
     }
   ]
 }
 ```
 
-Notes:
+### 5) `create_video_from_transcription.py`
 
-- `output_video_path` is preferred; `video_path` is also supported.
-- `audio_file` is resolved relative to `folder_path` unless it is an absolute path.
-- Captions are centered and dynamically scaled to occupy most of the frame.
-- Output is black background video with timed lyrics and original audio.
-
-## Transcribe Vocals (Whisper)
-
-Generate two files next to an audio file:
-
-- `transcription.json`
-- `transcription_for_video.json` (compatible with `video_from_json.py`)
+Usage:
 
 ```bash
-source .venv/bin/activate
-python3 transcribe_audio.py /path/to/file_vocals.mp3
+python3 create_video_from_transcription.py \
+  <transcription_json_path> \
+  <vocals_audio_path> \
+  <kareoke_audio_path> \
+  [--width 1920] \
+  [--height 1080] \
+  [--output-video-path <path>]
 ```
 
-Optional flags:
+Parameters:
 
-- `--model` (default: `small`)
-- `--language` (force language code, e.g. `en`, `tr`)
-- `--device` (`auto`, `cpu`, `cuda`; default: `auto`)
+- `transcription_json_path` (required): path to `<run_name>_transcription.json`.
+- `vocals_audio_path` (required): vocals path (validated as readable; part of contract).
+- `kareoke_audio_path` (required): kareoke path (used as muxed audio track).
+- `--width` (optional, default `1920`): output width.
+- `--height` (optional, default `1080`): output height.
+- `--output-video-path` (optional): explicit output path.
 
-Output JSON shape:
+Default output path:
 
-```json
-{
-  "source_audio": "/abs/path/to/file_vocals.mp3",
-  "model": "small",
-  "language": "en",
-  "duration_seconds": 202.0,
-  "created_at": "2026-03-06T21:49:34.472838+00:00",
-  "chunks": [
-    { "index": 0, "start": 0.0, "end": 2.0, "text": "Sentence one." },
-    { "index": 1, "start": 2.0, "end": 5.4, "text": "Sentence two." }
-  ]
-}
+- `<folder>/<run_name>.mp4` if `--output-video-path` is omitted.
+
+What it does:
+
+- Validates transcription JSON shape (`chunks[].start_time_ms`, `chunks[].end_time_ms`, `chunks[].text`).
+- Renders caption PNG overlays with Pillow (centered, dynamic font sizing).
+- Builds ffmpeg filter graph with `enable=between(t,start,end)` using ms timings.
+- Produces black-background MP4 with kareoke audio.
+
+Under the hood:
+
+- `app.video.build_video_spec`
+- `app.video.load_transcription_chunks`
+- `app.video.build_ffmpeg_command`
+- `app.video.create_video_from_transcription`
+
+## Output File Contract
+
+Inside `.outputs/<run_name>/`:
+
+- `<run_name>_original.mp3`
+- `<run_name>_vocals.mp3`
+- `<run_name>_kareoke.mp3`
+- `<run_name>_transcription.json`
+- `<run_name>.mp4` (default)
+
+## Testing
+
+Run all tests:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Notes:
+Coverage includes:
 
-- Both JSON files are always written to the same folder as the input audio.
-- Segments are sentence-oriented when punctuation (`.`, `!`, `?`) is available.
-- Whisper model files are auto-downloaded on first use.
+- CLI argument handling and error paths
+- name normalization and output filename contracts
+- transcription ms conversion and schema behavior
+- demix command orchestration parameters
+- video timing filter generation from ms chunks
+- dry end-to-end file handoff sequence
 
-## Model directory reference
-
-Default model directory is now local project path:
-
-- `./models/MDX`
-
-Override (optional):
-
-- `AUDIO_SEP_MODELS_DIR=/absolute/path/to/models python main.py`
-
-The required model hashes remain:
-
-- vocals: `499a6a6bf9da6d330235a1576007ddc0` (`Kim_Vocal_2.safetensors`)
-- instrumental (used as kareoke): `a78fcc2e0ff8d575edd2c55add1eaa64` (`Kim_Inst.safetensors`)

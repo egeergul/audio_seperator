@@ -48,11 +48,26 @@ def resolve_device(device: str) -> str:
     return device
 
 
-def validate_audio_path(audio_path: Path) -> None:
-    if not audio_path.is_file():
-        raise FileNotFoundError(f"Audio file not found: {audio_path}")
-    if not os.access(audio_path, os.R_OK):
-        raise PermissionError(f"Audio file is not readable: {audio_path}")
+def validate_audio_path(audio_path: Path) -> Path:
+    resolved = audio_path.expanduser().resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"Audio file not found: {resolved}")
+    if not os.access(resolved, os.R_OK):
+        raise PermissionError(f"Audio file is not readable: {resolved}")
+    return resolved
+
+
+def derive_run_name_from_audio(audio_path: Path) -> str:
+    parent_name = audio_path.resolve().parent.name.strip()
+    if not parent_name:
+        raise ValueError(f"Could not derive run name from path: {audio_path}")
+    return parent_name
+
+
+def derive_transcription_output_path(audio_path: Path) -> Path:
+    resolved = audio_path.resolve()
+    run_name = derive_run_name_from_audio(resolved)
+    return resolved.parent / f"{run_name}_transcription.json"
 
 
 def _split_sentence_text(text: str) -> list[str]:
@@ -84,7 +99,13 @@ def _duration_proportional_splits(
     return chunks
 
 
-def segments_to_sentence_chunks(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _to_ms(seconds: float) -> int:
+    return int(round(seconds * 1000))
+
+
+def segments_to_sentence_chunks_ms(
+    segments: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     chunks: list[dict[str, Any]] = []
     next_index = 0
 
@@ -100,8 +121,8 @@ def segments_to_sentence_chunks(segments: list[dict[str, Any]]) -> list[dict[str
             chunks.append(
                 {
                     "index": next_index,
-                    "start": round(start, 3),
-                    "end": round(end, 3),
+                    "start_time_ms": _to_ms(start),
+                    "end_time_ms": _to_ms(max(start, end)),
                     "text": text,
                 }
             )
@@ -113,8 +134,8 @@ def segments_to_sentence_chunks(segments: list[dict[str, Any]]) -> list[dict[str
             chunks.append(
                 {
                     "index": next_index,
-                    "start": round(start, 3),
-                    "end": round(end, 3),
+                    "start_time_ms": _to_ms(start),
+                    "end_time_ms": _to_ms(max(start, end)),
                     "text": text,
                 }
             )
@@ -122,11 +143,15 @@ def segments_to_sentence_chunks(segments: list[dict[str, Any]]) -> list[dict[str
             continue
 
         for sentence_text, (chunk_start, chunk_end) in zip(sentence_texts, time_ranges):
+            chunk_start_ms = _to_ms(chunk_start)
+            chunk_end_ms = _to_ms(chunk_end)
+            if chunk_end_ms < chunk_start_ms:
+                chunk_end_ms = chunk_start_ms
             chunks.append(
                 {
                     "index": next_index,
-                    "start": round(float(chunk_start), 3),
-                    "end": round(float(chunk_end), 3),
+                    "start_time_ms": chunk_start_ms,
+                    "end_time_ms": chunk_end_ms,
                     "text": sentence_text,
                 }
             )
@@ -138,30 +163,25 @@ def segments_to_sentence_chunks(segments: list[dict[str, Any]]) -> list[dict[str
 def transcribe_audio(
     audio_path: Path, model_name: str, language: str | None, device: str
 ) -> dict[str, Any]:
-    validate_audio_path(audio_path)
+    resolved_audio_path = validate_audio_path(audio_path)
     whisper = _import_whisper()
     runtime_device = resolve_device(device)
 
     model = whisper.load_model(model_name, device=runtime_device)
-    result = model.transcribe(str(audio_path), language=language)
+    result = model.transcribe(str(resolved_audio_path), language=language)
 
     segments = result.get("segments") or []
     if not isinstance(segments, list):
         segments = []
 
-    chunks = segments_to_sentence_chunks(segments)
-    duration_seconds = float(
-        max(
-            [chunk["end"] for chunk in chunks],
-            default=0.0,
-        )
-    )
+    chunks = segments_to_sentence_chunks_ms(segments)
+    duration_ms = max([chunk["end_time_ms"] for chunk in chunks], default=0)
 
     payload = {
-        "source_audio": str(audio_path.resolve()),
+        "source_audio": str(resolved_audio_path),
         "model": model_name,
         "language": result.get("language") or language,
-        "duration_seconds": round(duration_seconds, 3),
+        "duration_ms": duration_ms,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "chunks": chunks,
     }
@@ -169,68 +189,10 @@ def transcribe_audio(
 
 
 def write_transcription_json(audio_path: Path, payload: dict[str, Any]) -> Path:
-    output_path = audio_path.resolve().parent / "transcription.json"
+    resolved_audio_path = audio_path.expanduser().resolve()
+    output_path = derive_transcription_output_path(resolved_audio_path)
     output_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    return output_path
-
-
-def build_video_transcription_payload(audio_path: Path, payload: dict[str, Any]) -> dict[str, Any]:
-    resolved_audio_path = audio_path.resolve()
-    folder_path = resolved_audio_path.parent
-    input_audio_file = resolved_audio_path.name
-
-    # Prefer matching kareoke track when input is *_vocals.mp3 and file exists.
-    preferred_audio_file = input_audio_file
-    if input_audio_file.endswith("_vocals.mp3"):
-        candidate = input_audio_file.replace("_vocals.mp3", "_kareoke.mp3")
-        if (folder_path / candidate).is_file():
-            preferred_audio_file = candidate
-
-    base_name = resolved_audio_path.stem
-    if base_name.endswith("_vocals"):
-        base_name = base_name[: -len("_vocals")]
-    output_video_path = folder_path / f"{base_name}.mp4"
-
-    chunks = payload.get("chunks", [])
-    content: list[dict[str, Any]] = []
-    for chunk in chunks:
-        start_seconds = float(chunk.get("start", 0.0))
-        end_seconds = float(chunk.get("end", start_seconds))
-        text = str(chunk.get("text", "")).strip()
-        if not text:
-            continue
-
-        start_ms = int(round(start_seconds * 1000))
-        end_ms = int(round(end_seconds * 1000))
-        if end_ms < start_ms:
-            end_ms = start_ms
-
-        content.append(
-            {
-                "start_time_ms": start_ms,
-                "end_time_ms": end_ms,
-                "text": text,
-            }
-        )
-
-    return {
-        "folder_path": str(folder_path),
-        "audio_file": preferred_audio_file,
-        "video_width": 1920,
-        "video_height": 1080,
-        "output_video_path": str(output_video_path),
-        "content": content,
-    }
-
-
-def write_video_transcription_json(audio_path: Path, payload: dict[str, Any]) -> Path:
-    output_path = audio_path.resolve().parent / "transcription_for_video.json"
-    video_payload = build_video_transcription_payload(audio_path, payload)
-    output_path.write_text(
-        json.dumps(video_payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
     return output_path

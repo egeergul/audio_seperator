@@ -1,17 +1,13 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
-from PIL import Image, ImageDraw, ImageFont
 
 FPS = 30
 TEXT_MAX_WIDTH_RATIO = 0.92
@@ -27,8 +23,9 @@ class CaptionItem:
 
 @dataclass(frozen=True)
 class VideoSpec:
-    folder_path: Path
-    audio_path: Path
+    transcription_path: Path
+    vocals_audio_path: Path
+    kareoke_audio_path: Path
     video_width: int
     video_height: int
     output_video_path: Path
@@ -39,26 +36,12 @@ def _is_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _require_non_empty_str(obj: dict[str, Any], key: str) -> str:
-    value = obj.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"'{key}' must be a non-empty string.")
-    return value
-
-
-def _require_positive_int(obj: dict[str, Any], key: str) -> int:
-    value = obj.get(key)
-    if not _is_int(value) or value <= 0:
-        raise ValueError(f"'{key}' must be an integer greater than 0.")
-    return value
-
-
 def _format_seconds(seconds: float) -> str:
     formatted = f"{seconds:.3f}".rstrip("0").rstrip(".")
     return formatted or "0"
 
 
-def _check_prerequisites() -> None:
+def check_video_prerequisites() -> None:
     if shutil.which("ffmpeg") is None:
         raise EnvironmentError(
             "Missing required command: ffmpeg. Install ffmpeg and ensure it is on PATH."
@@ -67,6 +50,117 @@ def _check_prerequisites() -> None:
         raise EnvironmentError(
             "Missing required command: ffprobe. Install ffprobe and ensure it is on PATH."
         )
+
+
+def _require_readable_file(path: Path, field_name: str) -> Path:
+    resolved = path.expanduser().resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"{field_name} not found: {resolved}")
+    if not os.access(resolved, os.R_OK):
+        raise PermissionError(f"{field_name} is not readable: {resolved}")
+    return resolved
+
+
+def _derive_run_name(folder_path: Path) -> str:
+    run_name = folder_path.resolve().name.strip()
+    if not run_name:
+        raise ValueError(f"Could not derive run name from folder: {folder_path}")
+    return run_name
+
+
+def load_transcription_chunks(transcription_path: Path) -> list[CaptionItem]:
+    if not transcription_path.is_file():
+        raise FileNotFoundError(f"Transcription file not found: {transcription_path}")
+
+    try:
+        raw = json.loads(transcription_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Transcription file is not valid JSON: {transcription_path}"
+        ) from exc
+
+    if not isinstance(raw, dict):
+        raise ValueError("Transcription JSON top-level value must be an object.")
+
+    chunks_raw = raw.get("chunks")
+    if not isinstance(chunks_raw, list):
+        raise ValueError("Transcription JSON must include a 'chunks' list.")
+
+    content_items: list[CaptionItem] = []
+    for idx, item in enumerate(chunks_raw):
+        if not isinstance(item, dict):
+            raise ValueError(f"'chunks[{idx}]' must be an object.")
+
+        start_time_ms = item.get("start_time_ms")
+        end_time_ms = item.get("end_time_ms")
+        text = item.get("text")
+
+        if not _is_int(start_time_ms) or start_time_ms < 0:
+            raise ValueError(
+                f"'chunks[{idx}].start_time_ms' must be a non-negative integer."
+            )
+        if not _is_int(end_time_ms) or end_time_ms < 0:
+            raise ValueError(
+                f"'chunks[{idx}].end_time_ms' must be a non-negative integer."
+            )
+        if start_time_ms >= end_time_ms:
+            raise ValueError(
+                f"'chunks[{idx}]' has invalid timing: start_time_ms must be < end_time_ms."
+            )
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"'chunks[{idx}].text' must be a non-empty string.")
+
+        content_items.append(
+            CaptionItem(
+                start_time_ms=start_time_ms,
+                end_time_ms=end_time_ms,
+                text=text.strip(),
+            )
+        )
+
+    return content_items
+
+
+def build_video_spec(
+    transcription_path: Path,
+    vocals_audio_path: Path,
+    kareoke_audio_path: Path,
+    video_width: int,
+    video_height: int,
+    output_video_path: Path | None = None,
+) -> VideoSpec:
+    if not _is_int(video_width) or video_width <= 0:
+        raise ValueError("video width must be an integer greater than 0.")
+    if not _is_int(video_height) or video_height <= 0:
+        raise ValueError("video height must be an integer greater than 0.")
+
+    resolved_transcription_path = _require_readable_file(
+        transcription_path, "Transcription file"
+    )
+    resolved_vocals_audio_path = _require_readable_file(vocals_audio_path, "Vocals audio")
+    resolved_kareoke_audio_path = _require_readable_file(
+        kareoke_audio_path, "Kareoke audio"
+    )
+
+    content = load_transcription_chunks(resolved_transcription_path)
+    run_dir = resolved_transcription_path.parent
+    run_name = _derive_run_name(run_dir)
+
+    resolved_output_video_path = (
+        output_video_path.expanduser().resolve()
+        if output_video_path is not None
+        else (run_dir / f"{run_name}.mp4").resolve()
+    )
+
+    return VideoSpec(
+        transcription_path=resolved_transcription_path,
+        vocals_audio_path=resolved_vocals_audio_path,
+        kareoke_audio_path=resolved_kareoke_audio_path,
+        video_width=video_width,
+        video_height=video_height,
+        output_video_path=resolved_output_video_path,
+        content=content,
+    )
 
 
 def _probe_audio_duration_seconds(audio_path: Path) -> float:
@@ -101,6 +195,8 @@ def _probe_audio_duration_seconds(audio_path: Path) -> float:
 
 
 def _load_font(font_size: int) -> ImageFont.ImageFont:
+    from PIL import ImageFont
+
     font_candidates = [
         "DejaVuSans-Bold.ttf",
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -117,7 +213,7 @@ def _load_font(font_size: int) -> ImageFont.ImageFont:
 
 
 def _text_width(
-    draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, stroke_width: int
+    draw: Any, text: str, font: Any, stroke_width: int
 ) -> int:
     left, _, right, _ = draw.textbbox(
         (0, 0), text, font=font, stroke_width=stroke_width
@@ -126,7 +222,7 @@ def _text_width(
 
 
 def _line_height(
-    draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont, stroke_width: int
+    draw: Any, font: Any, stroke_width: int
 ) -> int:
     _, top, _, bottom = draw.textbbox(
         (0, 0), "Ag", font=font, stroke_width=stroke_width
@@ -135,9 +231,9 @@ def _line_height(
 
 
 def _split_long_token(
-    draw: ImageDraw.ImageDraw,
+    draw: Any,
     token: str,
-    font: ImageFont.ImageFont,
+    font: Any,
     max_width: int,
     stroke_width: int,
 ) -> list[str]:
@@ -156,9 +252,9 @@ def _split_long_token(
 
 
 def _wrap_text(
-    draw: ImageDraw.ImageDraw,
+    draw: Any,
     text: str,
-    font: ImageFont.ImageFont,
+    font: Any,
     max_width: int,
     stroke_width: int,
 ) -> list[str]:
@@ -191,6 +287,8 @@ def _wrap_text(
 def _render_caption_image(
     output_path: Path, text: str, width: int, height: int, index: int
 ) -> Path:
+    from PIL import Image, ImageDraw
+
     image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
 
@@ -247,93 +345,7 @@ def _render_caption_image(
     return overlay_path
 
 
-def _load_video_spec(spec_path: Path) -> VideoSpec:
-    if not spec_path.is_file():
-        raise FileNotFoundError(f"Spec file not found: {spec_path}")
-
-    try:
-        raw = json.loads(spec_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Spec file is not valid JSON: {spec_path}") from exc
-
-    if not isinstance(raw, dict):
-        raise ValueError("Top-level JSON must be an object.")
-
-    required_keys = [
-        "folder_path",
-        "audio_file",
-        "video_width",
-        "video_height",
-        "content",
-    ]
-    for key in required_keys:
-        if key not in raw:
-            raise ValueError(f"Missing required key: '{key}'")
-
-    folder_path = Path(_require_non_empty_str(raw, "folder_path"))
-    audio_file_raw = Path(_require_non_empty_str(raw, "audio_file"))
-    video_width = _require_positive_int(raw, "video_width")
-    video_height = _require_positive_int(raw, "video_height")
-
-    output_video_key = "output_video_path" if "output_video_path" in raw else "video_path"
-    output_video_raw = raw.get(output_video_key)
-    if output_video_raw is None:
-        raise ValueError("Missing output path. Provide 'output_video_path' (or 'video_path').")
-    if not isinstance(output_video_raw, str) or not output_video_raw.strip():
-        raise ValueError(f"'{output_video_key}' must be a non-empty string.")
-
-    content_raw = raw["content"]
-    if not isinstance(content_raw, list):
-        raise ValueError("'content' must be a list.")
-
-    content_items: list[CaptionItem] = []
-    for idx, item in enumerate(content_raw):
-        if not isinstance(item, dict):
-            raise ValueError(f"'content[{idx}]' must be an object.")
-
-        if "start_time_ms" not in item or "end_time_ms" not in item or "text" not in item:
-            raise ValueError(
-                f"'content[{idx}]' must include 'start_time_ms', 'end_time_ms', and 'text'."
-            )
-
-        start_time_ms = item["start_time_ms"]
-        end_time_ms = item["end_time_ms"]
-        text = item["text"]
-
-        if not _is_int(start_time_ms) or start_time_ms < 0:
-            raise ValueError(f"'content[{idx}].start_time_ms' must be a non-negative integer.")
-        if not _is_int(end_time_ms) or end_time_ms < 0:
-            raise ValueError(f"'content[{idx}].end_time_ms' must be a non-negative integer.")
-        if start_time_ms >= end_time_ms:
-            raise ValueError(
-                f"'content[{idx}]' has invalid timing: start_time_ms must be < end_time_ms."
-            )
-        if not isinstance(text, str) or not text.strip():
-            raise ValueError(f"'content[{idx}].text' must be a non-empty string.")
-
-        content_items.append(
-            CaptionItem(start_time_ms=start_time_ms, end_time_ms=end_time_ms, text=text.strip())
-        )
-
-    audio_path = audio_file_raw if audio_file_raw.is_absolute() else folder_path / audio_file_raw
-    output_video_path = Path(output_video_raw)
-
-    if not folder_path.is_dir():
-        raise FileNotFoundError(f"Folder path does not exist or is not a directory: {folder_path}")
-    if not audio_path.is_file():
-        raise FileNotFoundError(f"Audio file not found: {audio_path}")
-
-    return VideoSpec(
-        folder_path=folder_path,
-        audio_path=audio_path,
-        video_width=video_width,
-        video_height=video_height,
-        output_video_path=output_video_path,
-        content=content_items,
-    )
-
-
-def _build_ffmpeg_command(
+def build_ffmpeg_command(
     spec: VideoSpec, duration_seconds: float, overlays: list[Path]
 ) -> list[str]:
     color_input = (
@@ -349,7 +361,7 @@ def _build_ffmpeg_command(
         "-i",
         color_input,
         "-i",
-        str(spec.audio_path),
+        str(spec.kareoke_audio_path),
     ]
 
     for overlay_path in overlays:
@@ -409,39 +421,24 @@ def _run_command(cmd: list[str]) -> None:
         raise RuntimeError("ffmpeg command failed. See logs above for details.") from exc
 
 
-def run(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("Usage: python video_from_json.py /path/to/spec.json", file=sys.stderr)
-        return 2
+def create_video_from_transcription(spec: VideoSpec) -> Path:
+    check_video_prerequisites()
+    spec.output_video_path.parent.mkdir(parents=True, exist_ok=True)
+    duration_seconds = _probe_audio_duration_seconds(spec.kareoke_audio_path)
 
-    spec_path = Path(argv[1])
-    try:
-        _check_prerequisites()
-        spec = _load_video_spec(spec_path)
-        spec.output_video_path.parent.mkdir(parents=True, exist_ok=True)
-        duration_seconds = _probe_audio_duration_seconds(spec.audio_path)
+    with tempfile.TemporaryDirectory(prefix="video_overlays_") as tmp_dir:
+        overlay_dir = Path(tmp_dir)
+        overlays = [
+            _render_caption_image(
+                overlay_dir,
+                item.text,
+                spec.video_width,
+                spec.video_height,
+                idx,
+            )
+            for idx, item in enumerate(spec.content)
+        ]
+        cmd = build_ffmpeg_command(spec, duration_seconds, overlays)
+        _run_command(cmd)
 
-        with tempfile.TemporaryDirectory(prefix="video_overlays_") as tmp_dir:
-            overlay_dir = Path(tmp_dir)
-            overlays = [
-                _render_caption_image(
-                    overlay_dir,
-                    item.text,
-                    spec.video_width,
-                    spec.video_height,
-                    idx,
-                )
-                for idx, item in enumerate(spec.content)
-            ]
-            cmd = _build_ffmpeg_command(spec, duration_seconds, overlays)
-            _run_command(cmd)
-
-        print(f"Video created successfully: {spec.output_video_path}")
-        return 0
-    except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(run(sys.argv))
+    return spec.output_video_path

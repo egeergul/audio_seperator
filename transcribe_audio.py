@@ -8,7 +8,6 @@ from pathlib import Path
 
 from app.transcription import (
     transcribe_audio,
-    write_video_transcription_json,
     write_transcription_json,
 )
 
@@ -33,10 +32,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Transcribe an audio file using Whisper and write a timestamped "
-            "transcription.json next to the input file."
+            "<run_name>_transcription.json next to the input file."
         )
     )
-    parser.add_argument("audio_path", help="Path to input audio file (e.g. xxx_vocals.mp3)")
+    parser.add_argument(
+        "audio_path", help="Path to input vocals audio file (e.g. xxx_vocals.mp3)"
+    )
     parser.add_argument(
         "--model",
         default="small",
@@ -70,12 +71,10 @@ def run() -> int:
             device=args.device,
         )
         output_path = write_transcription_json(audio_path, payload)
-        video_output_path = write_video_transcription_json(audio_path, payload)
 
         print("Transcription completed successfully.")
         print(f"Audio: {audio_path.resolve()}")
         print(f"Output: {output_path}")
-        print(f"Video JSON: {video_output_path}")
         return 0
     except KeyboardInterrupt:
         print("\nInterrupted by user.", file=sys.stderr)

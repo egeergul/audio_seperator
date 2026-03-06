@@ -27,9 +27,7 @@ def run_command(cmd: list[str], cwd: Path | None = None) -> None:
         raise RuntimeError(f"Command failed: {joined}") from exc
 
 
-def check_prerequisites() -> None:
-    if shutil.which("git") is None:
-        raise EnvironmentError("Missing required command: git")
+def check_separation_prerequisites() -> None:
     if shutil.which("ffmpeg") is None:
         raise EnvironmentError(
             "Missing required command: ffmpeg. Install ffmpeg and ensure it is on PATH."
@@ -63,18 +61,6 @@ def validate_vendor_runtime() -> None:
         )
 
 
-def prompt_user_inputs() -> tuple[str, str]:
-    youtube_url = input("Enter YouTube URL: ").strip()
-    if not youtube_url:
-        raise ValueError("YouTube URL cannot be empty.")
-
-    creation_name = input("Enter creation name: ").strip()
-    if not creation_name:
-        raise ValueError("Creation name cannot be empty.")
-
-    return youtube_url, creation_name
-
-
 def sanitize_creation_name(raw_name: str) -> str:
     sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_name).strip("._-")
     if not sanitized:
@@ -90,7 +76,38 @@ def create_run_folder(creation_name: str) -> Path:
             f"Folder already exists: {run_dir}. Use a different creation name."
         )
     run_dir.mkdir(parents=False, exist_ok=False)
-    return run_dir
+    return run_dir.resolve()
+
+
+def create_normalized_run_folder(raw_name: str) -> Path:
+    creation_name = sanitize_creation_name(raw_name)
+    return create_run_folder(creation_name)
+
+
+def derive_run_name(folder_path: Path) -> str:
+    resolved = folder_path.resolve()
+    run_name = resolved.name.strip()
+    if not run_name:
+        raise ValueError(f"Could not derive run name from folder: {folder_path}")
+    return run_name
+
+
+def validate_output_folder(output_folder: Path) -> Path:
+    resolved = output_folder.expanduser().resolve()
+    if not resolved.is_dir():
+        raise FileNotFoundError(
+            f"Output folder does not exist or is not a directory: {resolved}"
+        )
+    return resolved
+
+
+def validate_readable_file(file_path: Path) -> Path:
+    resolved = file_path.expanduser().resolve()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"File not found: {resolved}")
+    if not os.access(resolved, os.R_OK):
+        raise PermissionError(f"File is not readable: {resolved}")
+    return resolved
 
 
 def resolve_models_dir() -> Path:
@@ -101,15 +118,19 @@ def resolve_models_dir() -> Path:
             raise FileNotFoundError(
                 f"AUDIO_SEP_MODELS_DIR does not exist: {override_path}"
             )
-        return override_path
+        return override_path.resolve()
 
     LOCAL_MODELS_MDX_DIR.mkdir(parents=True, exist_ok=True)
-    return LOCAL_MODELS_MDX_DIR
+    return LOCAL_MODELS_MDX_DIR.resolve()
 
 
-def download_youtube_audio(youtube_url: str, run_dir: Path) -> Path:
-    output_template = run_dir / "source_audio.%(ext)s"
-    print("Downloading audio from YouTube...")
+def download_youtube_audio(youtube_url: str, output_folder: Path) -> Path:
+    if not youtube_url.strip():
+        raise ValueError("YouTube URL cannot be empty.")
+
+    run_dir = validate_output_folder(output_folder)
+    run_name = derive_run_name(run_dir)
+    output_template = run_dir / f"{run_name}_original.%(ext)s"
     run_command(
         [
             sys.executable,
@@ -118,26 +139,25 @@ def download_youtube_audio(youtube_url: str, run_dir: Path) -> Path:
             "--no-playlist",
             "-x",
             "--audio-format",
-            "wav",
+            "mp3",
             "-o",
             str(output_template),
             youtube_url,
         ]
     )
 
-    audio_file = run_dir / "source_audio.wav"
+    audio_file = run_dir / f"{run_name}_original.mp3"
     if not audio_file.is_file():
         raise RuntimeError(
             f"Expected downloaded file was not created: {audio_file}. "
             "Check yt-dlp/ffmpeg output above."
         )
-    return audio_file
+    return audio_file.resolve()
 
 
 def run_demix(
     input_audio: Path, output_base: Path, model_hash: str, models_dir: Path
 ) -> None:
-    print(f"Running separation with model {model_hash}...")
     run_command(
         [
             sys.executable,
@@ -172,44 +192,41 @@ def rename_outputs_to_required_names(
             f"Expected instrumental output not found: {source_instrumental}"
         )
 
-    source_vocals.replace(target_vocals)
-    source_instrumental.replace(target_kareoke)
-    return target_vocals, target_kareoke
+    if target_vocals.exists() and not target_vocals.samefile(source_vocals):
+        raise FileExistsError(f"Target vocals file already exists: {target_vocals}")
+    if target_kareoke.exists() and not target_kareoke.samefile(source_instrumental):
+        raise FileExistsError(f"Target kareoke file already exists: {target_kareoke}")
+
+    _replace_with_case_only_support(source_vocals, target_vocals)
+    _replace_with_case_only_support(source_instrumental, target_kareoke)
+    return target_vocals.resolve(), target_kareoke.resolve()
 
 
-def run_cli() -> int:
-    try:
-        check_prerequisites()
-        validate_vendor_runtime()
+def _replace_with_case_only_support(source: Path, target: Path) -> None:
+    if source == target:
+        return
+    if source.parent == target.parent and source.name.lower() == target.name.lower():
+        temp_target = source.parent / f".tmp_case_rename_{os.getpid()}_{source.name}"
+        if temp_target.exists():
+            raise FileExistsError(f"Temporary rename path already exists: {temp_target}")
+        source.replace(temp_target)
+        temp_target.replace(target)
+        return
+    source.replace(target)
 
-        youtube_url, creation_name_raw = prompt_user_inputs()
-        creation_name = sanitize_creation_name(creation_name_raw)
-        if creation_name != creation_name_raw:
-            print(f"Using sanitized creation name: {creation_name}")
 
-        run_dir = create_run_folder(creation_name)
-        print(f"Created folder: {run_dir}")
+def seperate_audio(original_file_path: Path) -> tuple[Path, Path]:
+    original_file = validate_readable_file(original_file_path)
+    check_separation_prerequisites()
+    validate_vendor_runtime()
 
-        audio_file = download_youtube_audio(youtube_url, run_dir)
-        models_dir = resolve_models_dir()
-        print(f"Using model directory: {models_dir}")
+    run_dir = original_file.parent
+    run_name = derive_run_name(run_dir)
 
-        output_base = run_dir / creation_name
-        run_demix(audio_file, output_base, VOCALS_MODEL_HASH, models_dir)
-        run_demix(audio_file, output_base, INSTRUMENTAL_MODEL_HASH, models_dir)
+    output_base = run_dir / run_name
+    models_dir = resolve_models_dir()
 
-        vocals_path, kareoke_path = rename_outputs_to_required_names(
-            run_dir, creation_name
-        )
+    run_demix(original_file, output_base, VOCALS_MODEL_HASH, models_dir)
+    run_demix(original_file, output_base, INSTRUMENTAL_MODEL_HASH, models_dir)
 
-        print("\nPipeline completed successfully.")
-        print(f"Source audio: {audio_file}")
-        print(f"Vocals: {vocals_path}")
-        print(f"Kareoke: {kareoke_path}")
-        return 0
-    except KeyboardInterrupt:
-        print("\nInterrupted by user.", file=sys.stderr)
-        return 130
-    except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+    return rename_outputs_to_required_names(run_dir, run_name)

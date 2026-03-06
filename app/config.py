@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+OUTPUTS_DIR = PROJECT_ROOT / ".outputs"
 LOCAL_MODELS_MDX_DIR = PROJECT_ROOT / "models" / "MDX"
 VENDOR_AUDIO_SEPARATION_DIR = PROJECT_ROOT / "vendor" / "audio_separation"
 VENDOR_DEMIX_SCRIPT = VENDOR_AUDIO_SEPARATION_DIR / "tool" / "demix.py"

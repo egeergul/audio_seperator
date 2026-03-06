@@ -1,2 +1,1 @@
-"""Application package for the terminal audio separation pipeline."""
-
+"""Shared service modules for the audio micro-service scripts."""
