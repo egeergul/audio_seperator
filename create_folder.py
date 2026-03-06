@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from app.pipeline import create_normalized_run_folder
+from services.folder import create_normalized_run_folder
 
 
 def parse_args() -> argparse.Namespace:

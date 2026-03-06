@@ -196,3 +196,4 @@ def write_transcription_json(audio_path: Path, payload: dict[str, Any]) -> Path:
         encoding="utf-8",
     )
     return output_path
+

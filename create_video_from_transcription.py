@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.video import build_video_spec, create_video_from_transcription
+from services.video import build_video_spec, create_video_from_transcription
 
 
 def parse_args() -> argparse.Namespace:

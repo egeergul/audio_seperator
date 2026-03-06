@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.transcription import (
+from services.transcription import (
     transcribe_audio,
     write_transcription_json,
 )

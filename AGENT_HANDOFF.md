@@ -1,16 +1,16 @@
-# Agent Handoff: Audio Scraper Micro-Service Refactor
+# Agent Handoff: Audio Scraper Service-Module Refactor
 
 This document is the single-source context file for future AI agents. It is written so an agent can continue work without re-exploring the repository.
 
 ## 1) Current Snapshot
 
 - Repository root: `audio_scraper/`
-- Refactor status: micro-service CLI split is implemented in code.
+- Refactor status: `app/` package was removed and replaced by `services/`.
 - Canonical output root is `.outputs/` (hidden).
 - Spelling contract `kareoke` is intentionally preserved across scripts and outputs.
-- Legacy interactive orchestrator (`main.py`) is removed from the staged refactor.
-- Legacy JSON-video entry script (`video_from_json.py`) has been moved into `app/video.py` service logic and replaced by `create_video_from_transcription.py` CLI.
-- Current test suite: `18` tests, all passing with `python3 -m unittest discover -s tests -p 'test_*.py'`.
+- Legacy interactive orchestrator (`main.py`) is removed.
+- Legacy JSON-video entry script (`video_from_json.py`) is no longer used; video flow is handled by `create_video_from_transcription.py` + `services/video/*`.
+- There is currently no committed `tests/` directory in this checkout.
 
 ## 2) Project Goals
 
@@ -42,9 +42,9 @@ Behavior:
 
 Backed by:
 
-- `app.pipeline.sanitize_creation_name`
-- `app.pipeline.create_run_folder`
-- `app.pipeline.create_normalized_run_folder`
+- `services.folder.sanitize_creation_name`
+- `services.folder.create_run_folder`
+- `services.folder.create_normalized_run_folder`
 
 ### `scrape_audio.py`
 
@@ -65,7 +65,7 @@ Behavior:
 
 Backed by:
 
-- `app.pipeline.download_youtube_audio`
+- `services.download.download_youtube_audio`
 
 ### `seperate_audio.py`
 
@@ -89,9 +89,9 @@ Behavior:
 
 Backed by:
 
-- `app.pipeline.seperate_audio`
-- `app.pipeline.run_demix`
-- `app.pipeline.rename_outputs_to_required_names`
+- `services.separation.seperate_audio`
+- `services.separation.run_demix`
+- `services.separation.rename_outputs_to_required_names`
 
 ### `transcribe_audio.py`
 
@@ -116,9 +116,9 @@ Behavior:
 
 Backed by:
 
-- `app.transcription.transcribe_audio`
-- `app.transcription.segments_to_sentence_chunks_ms`
-- `app.transcription.write_transcription_json`
+- `services.transcription.transcribe_audio`
+- `services.transcription.segments_to_sentence_chunks_ms`
+- `services.transcription.write_transcription_json`
 
 ### `create_video_from_transcription.py`
 
@@ -139,14 +139,14 @@ Behavior:
 
 Backed by:
 
-- `app.video.build_video_spec`
-- `app.video.load_transcription_chunks`
-- `app.video.create_video_from_transcription`
-- `app.video.build_ffmpeg_command`
+- `services.video.build_video_spec`
+- `services.video.load_transcription_chunks`
+- `services.video.create_video_from_transcription`
+- `services.video.build_ffmpeg_command`
 
 Note:
 
-- `vocals_audio_path` is currently validated and stored in spec, but kareoke path is the muxed audio input.
+- `vocals_audio_path` is validated and stored in the spec, but kareoke path is the muxed audio input.
 
 ## 4) Data Contracts
 
@@ -187,7 +187,7 @@ Produced by `transcribe_audio.py` and consumed by `create_video_from_transcripti
 }
 ```
 
-Validation rules in `app.video.load_transcription_chunks`:
+Validation rules in `services.video.load_transcription_chunks`:
 
 - top-level object with `chunks` list
 - each chunk is object
@@ -202,22 +202,36 @@ Top-level scripts are thin CLI wrappers only.
 
 ### Service modules
 
-- `app/config.py`
+- `services/config.py`
   - source of truth for project paths and model hashes.
   - `OUTPUTS_DIR = PROJECT_ROOT / ".outputs"`
-- `app/pipeline.py`
-  - folder creation, name sanitation, download, separation orchestration.
-- `app/transcription.py`
+- `services/common.py`
+  - shared command execution and path validation helpers.
+- `services/folder.py`
+  - folder creation and name sanitization.
+- `services/download.py`
+  - yt-dlp download orchestration.
+- `services/separation.py`
+  - separation prerequisites, demix orchestration, rename contract.
+- `services/transcription.py`
   - whisper loading, device selection, sentence chunking, ms conversion, JSON writing.
-- `app/video.py`
-  - transcription schema validation, video spec construction, caption rendering, ffmpeg command generation, video creation.
+- `services/video/schema.py`
+  - transcription JSON validation and caption item parsing.
+- `services/video/spec.py`
+  - video spec construction and output path derivation.
+- `services/video/captions.py`
+  - caption image layout/rendering.
+- `services/video/ffmpeg.py`
+  - ffprobe duration lookup, ffmpeg filter graph and command build/run.
+- `services/video/service.py`
+  - end-to-end video creation orchestration.
 
 ### Vendor integration boundary
 
 - Demix entrypoint invoked by project code:
   - `vendor/audio_separation/tool/demix.py`
 - Called through:
-  - `app.pipeline.run_demix(...)`
+  - `services.separation.run_demix(...)`
 - Working directory for invocation:
   - `vendor/audio_separation`
 
@@ -278,54 +292,33 @@ System tools required:
 
 Notes:
 
-- `app.pipeline.check_separation_prerequisites` explicitly checks `ffmpeg`, `torchcodec`, `packaging`.
-- `app.video.check_video_prerequisites` checks `ffmpeg` and `ffprobe`.
+- `services.separation.check_separation_prerequisites` explicitly checks `ffmpeg`, `torchcodec`, `packaging`.
+- `services.video.check_video_prerequisites` checks `ffmpeg` and `ffprobe`.
 
-## 8) Tests and What They Cover
-
-All tests live under `tests/` and currently pass.
-
-- `test_pipeline_services.py`
-  - name sanitization
-  - `.outputs` folder contract
-  - yt-dlp command shape
-  - demix command parameters
-  - dual-hash separation orchestration + rename contract
-- `test_transcription_services.py`
-  - sentence chunk conversion to ms fields
-  - transcription output naming contract
-- `test_video_services.py`
-  - transcription JSON schema validation
-  - default output path derivation
-  - ffmpeg filter timing generation from ms chunks
-- `test_cli.py`
-  - `--help` and missing args behavior for all 5 scripts
-  - invalid-path and invalid-json CLI error paths
-- `test_e2e_dry_pipeline.py`
-  - mocked end-to-end handoff sequence across all stages
-
-Run command:
-
-```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
-```
-
-## 9) Repository Layout (Relevant)
+## 8) Repository Layout (Relevant)
 
 ```text
 audio_scraper/
-├── app/
+├── services/
 │   ├── __init__.py
 │   ├── config.py
-│   ├── pipeline.py
+│   ├── common.py
+│   ├── folder.py
+│   ├── download.py
+│   ├── separation.py
 │   ├── transcription.py
-│   └── video.py
+│   └── video/
+│       ├── __init__.py
+│       ├── schema.py
+│       ├── spec.py
+│       ├── captions.py
+│       ├── ffmpeg.py
+│       └── service.py
 ├── create_folder.py
 ├── scrape_audio.py
 ├── seperate_audio.py
 ├── transcribe_audio.py
 ├── create_video_from_transcription.py
-├── tests/
 ├── vendor/audio_separation/
 ├── models/
 ├── .outputs/
@@ -334,7 +327,7 @@ audio_scraper/
 └── AGENT_HANDOFF.md
 ```
 
-## 10) Known Caveats and Design Constraints
+## 9) Known Caveats and Design Constraints
 
 - `kareoke` spelling is intentional contract; do not normalize to `karaoke` unless explicitly requested.
 - No overwrite mode: scripts fail on conflicting targets.
@@ -343,7 +336,7 @@ audio_scraper/
 - Separation first-run latency can be high depending on model availability and hardware.
 - Caption rendering needs a scalable TTF font (`DejaVuSans-Bold.ttf` or macOS Arial fallback paths).
 
-## 11) Practical Command Sequence
+## 10) Practical Command Sequence
 
 ```bash
 python3 create_folder.py "Wild Flower"
@@ -356,12 +349,11 @@ python3 create_video_from_transcription.py \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 ```
 
-## 12) Recommendations for the Next Agent
+## 11) Recommendations for the Next Agent
 
-1. Preserve service-layer boundaries (`app/pipeline.py`, `app/transcription.py`, `app/video.py`) and keep top-level scripts thin.
-2. Keep `app/config.py` as the only path/hash constants source.
-3. If modifying transcription schema, update both producer (`app/transcription.py`) and validator/consumer (`app/video.py`) and then update tests.
+1. Preserve service-layer boundaries (`services/separation.py`, `services/transcription.py`, `services/video/*`) and keep top-level scripts thin.
+2. Keep `services/config.py` as the only path/hash constants source.
+3. If modifying transcription schema, update both producer (`services/transcription.py`) and validator/consumer (`services/video/schema.py`) together.
 4. If changing demix invocation, validate both model hashes still produce `*_Vocals.mp3` and `*_Instrumental.mp3` source files before rename.
 5. Maintain `.outputs/` as canonical output root unless user requests a breaking change.
-6. Run unit tests after any behavior change.
-
+6. Run compile/help smoke checks after behavior changes.

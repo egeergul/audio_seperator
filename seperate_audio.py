@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.pipeline import seperate_audio
+from services.separation import seperate_audio
 
 
 def parse_args() -> argparse.Namespace:

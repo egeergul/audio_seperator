@@ -58,8 +58,8 @@ What it does:
 
 Under the hood:
 
-- Uses `app.pipeline.create_normalized_run_folder`.
-- Path constants come from `app/config.py` (`OUTPUTS_DIR`).
+- Uses `services.folder.create_normalized_run_folder`.
+- Path constants come from `services/config.py` (`OUTPUTS_DIR`).
 
 ### 2) `scrape_audio.py`
 
@@ -85,7 +85,7 @@ What it does:
 Under the hood:
 
 - Calls `yt-dlp` through `python -m yt_dlp --no-playlist -x --audio-format mp3`.
-- Implemented in `app.pipeline.download_youtube_audio`.
+- Implemented in `services.download.download_youtube_audio`.
 
 ### 3) `seperate_audio.py`
 
@@ -148,9 +148,9 @@ What it does:
 
 Under the hood:
 
-- `app.transcription.transcribe_audio` runs Whisper and builds payload.
-- `app.transcription.segments_to_sentence_chunks_ms` handles punctuation-based split + proportional timing.
-- `app.transcription.write_transcription_json` writes next to input audio.
+- `services.transcription.transcribe_audio` runs Whisper and builds payload.
+- `services.transcription.segments_to_sentence_chunks_ms` handles punctuation-based split + proportional timing.
+- `services.transcription.write_transcription_json` writes next to input audio.
 
 Output schema:
 
@@ -208,10 +208,10 @@ What it does:
 
 Under the hood:
 
-- `app.video.build_video_spec`
-- `app.video.load_transcription_chunks`
-- `app.video.build_ffmpeg_command`
-- `app.video.create_video_from_transcription`
+- `services.video.build_video_spec`
+- `services.video.load_transcription_chunks`
+- `services.video.build_ffmpeg_command`
+- `services.video.create_video_from_transcription`
 
 ## Output File Contract
 
@@ -225,18 +225,15 @@ Inside `.outputs/<run_name>/`:
 
 ## Testing
 
-Run all tests:
+There is currently no committed `tests/` directory in this checkout.
+
+Recommended smoke checks:
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
+python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py services/*.py services/video/*.py
+python3 create_folder.py --help
+python3 scrape_audio.py --help
+python3 seperate_audio.py --help
+python3 transcribe_audio.py --help
+python3 create_video_from_transcription.py --help
 ```
-
-Coverage includes:
-
-- CLI argument handling and error paths
-- name normalization and output filename contracts
-- transcription ms conversion and schema behavior
-- demix command orchestration parameters
-- video timing filter generation from ms chunks
-- dry end-to-end file handoff sequence
-

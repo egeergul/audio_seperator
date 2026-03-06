@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.pipeline import download_youtube_audio
+from services.download import download_youtube_audio
 
 
 def parse_args() -> argparse.Namespace:
