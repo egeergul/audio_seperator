@@ -42,15 +42,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_json(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         raise FileNotFoundError(f"JSON file not found: {path}")
     if not path.is_file():
         raise ValueError(f"JSON path must be a file: {path}")
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
-    if not isinstance(data, dict):
-        raise ValueError("Top-level JSON must be an object.")
+    if isinstance(data, dict):
+        return [data]
+    if not isinstance(data, list):
+        raise ValueError("Top-level JSON must be a list of objects.")
+    if not data:
+        raise ValueError("Top-level JSON list cannot be empty.")
+    for index, item in enumerate(data, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"Entry {index} must be an object.")
     return data
 
 
@@ -118,6 +125,99 @@ def _get_optional_positive_int(
     return int(value)
 
 
+def _run_single(config: dict[str, Any], index: int, total: int) -> None:
+    raw_folder_name = _get_required_str(config, "folder_name")
+    youtube_url = _get_required_str(config, "youtube_url")
+    model_name = _get_optional_str(config, "model", default="small")
+    language = _get_optional_str(config, "language", default=None)
+    device = _get_optional_str(config, "device", default="auto")
+    width = _get_optional_positive_int(
+        config, "video_width", default=1920, aliases=("width",)
+    )
+    height = _get_optional_positive_int(
+        config, "video_height", default=1080, aliases=("height",)
+    )
+    song_name = _get_required_str(config, "song_name")
+    artist_name = _get_required_str(config, "artist_name")
+    metadata_language = _get_optional_str(config, "metadata_language", default="en")
+
+    if model_name is None:
+        model_name = "small"
+    if device is None:
+        device = "auto"
+    if metadata_language is None:
+        metadata_language = "en"
+
+    if model_name not in SUPPORTED_MODELS:
+        raise ValueError(
+            "Unsupported model. Choose one of: " + ", ".join(SUPPORTED_MODELS)
+        )
+    if device not in SUPPORTED_DEVICES:
+        raise ValueError("Unsupported device. Use: auto, cpu, or cuda.")
+    if metadata_language is None or not metadata_language.strip():
+        raise ValueError("Field 'metadata_language' cannot be empty.")
+
+    if total > 1:
+        print(f"\n=== Run {index}/{total} ===")
+
+    print("\nStep 1/6: Create run folder")
+    run_dir = create_normalized_run_folder(raw_folder_name)
+    run_name = run_dir.name
+    print(f"Created: {run_dir}")
+
+    print("\nStep 2/6: Download audio")
+    original_audio_path = download_youtube_audio(youtube_url, run_dir)
+    print(f"Downloaded: {original_audio_path}")
+
+    print("\nStep 3/6: Separate vocals and kareoke")
+    vocals_path, kareoke_path = seperate_audio(original_audio_path)
+    print(f"Vocals:  {vocals_path}")
+    print(f"Kareoke: {kareoke_path}")
+
+    print("\nStep 4/6: Transcribe vocals")
+    transcription_payload = transcribe_audio(
+        audio_path=vocals_path,
+        model_name=model_name,
+        language=language,
+        device=device,
+    )
+    transcription_path = write_transcription_json(vocals_path, transcription_payload)
+    print(f"Transcription: {transcription_path}")
+
+    print("\nStep 5/6: Create lyric videos (kareoke + vocals)")
+    kareoke_video_spec = build_video_spec(
+        transcription_path=transcription_path,
+        mux_audio_path=kareoke_path,
+        video_width=width,
+        video_height=height,
+        output_video_path=None,
+    )
+    vocals_video_spec = build_video_spec(
+        transcription_path=transcription_path,
+        mux_audio_path=vocals_path,
+        video_width=width,
+        video_height=height,
+        output_video_path=None,
+    )
+    vocals_video_path = create_video_from_transcription(vocals_video_spec)
+    # kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
+    # print(f"Kareoke video: {kareoke_video_path}")
+    print(f"Vocals video:  {vocals_video_path}")
+
+    print("\nStep 6/6: Create vocals video metadata")
+    metadata_path = create_video_metadata_for_vocals(
+        vocals_audio_path=vocals_path,
+        song_name=song_name,
+        artist_name=artist_name,
+        language=metadata_language,
+    )
+    print(f"Video metadata: {metadata_path}")
+
+    print("\nPipeline completed successfully.")
+    print(f"Run name: {run_name}")
+    print(f"Run dir:  {run_dir}")
+
+
 def run() -> int:
     print("Audio Scraper Full Pipeline (JSON)")
     print("==================================")
@@ -125,99 +225,12 @@ def run() -> int:
     try:
         args = parse_args()
         config_path = Path(args.json_path).expanduser()
-        config = _load_json(config_path)
-
-        raw_folder_name = _get_required_str(config, "folder_name")
-        youtube_url = _get_required_str(config, "youtube_url")
-        model_name = _get_optional_str(config, "model", default="small")
-        language = _get_optional_str(config, "language", default=None)
-        device = _get_optional_str(config, "device", default="auto")
-        width = _get_optional_positive_int(
-            config, "video_width", default=1920, aliases=("width",)
-        )
-        height = _get_optional_positive_int(
-            config, "video_height", default=1080, aliases=("height",)
-        )
-        song_name = _get_required_str(config, "song_name")
-        artist_name = _get_required_str(config, "artist_name")
-        metadata_language = _get_optional_str(
-            config, "metadata_language", default="en"
-        )
-
-        if model_name is None:
-            model_name = "small"
-        if device is None:
-            device = "auto"
-        if metadata_language is None:
-            metadata_language = "en"
-
-        if model_name not in SUPPORTED_MODELS:
-            raise ValueError(
-                "Unsupported model. Choose one of: " + ", ".join(SUPPORTED_MODELS)
-            )
-        if device not in SUPPORTED_DEVICES:
-            raise ValueError("Unsupported device. Use: auto, cpu, or cuda.")
-        if metadata_language is None or not metadata_language.strip():
-            raise ValueError("Field 'metadata_language' cannot be empty.")
+        configs = _load_json(config_path)
 
         print(f"\nConfig: {config_path.resolve()}")
 
-        print("\nStep 1/6: Create run folder")
-        run_dir = create_normalized_run_folder(raw_folder_name)
-        run_name = run_dir.name
-        print(f"Created: {run_dir}")
-
-        print("\nStep 2/6: Download audio")
-        original_audio_path = download_youtube_audio(youtube_url, run_dir)
-        print(f"Downloaded: {original_audio_path}")
-
-        print("\nStep 3/6: Separate vocals and kareoke")
-        vocals_path, kareoke_path = seperate_audio(original_audio_path)
-        print(f"Vocals:  {vocals_path}")
-        print(f"Kareoke: {kareoke_path}")
-
-        print("\nStep 4/6: Transcribe vocals")
-        transcription_payload = transcribe_audio(
-            audio_path=vocals_path,
-            model_name=model_name,
-            language=language,
-            device=device,
-        )
-        transcription_path = write_transcription_json(vocals_path, transcription_payload)
-        print(f"Transcription: {transcription_path}")
-
-        print("\nStep 5/6: Create lyric videos (kareoke + vocals)")
-        kareoke_video_spec = build_video_spec(
-            transcription_path=transcription_path,
-            mux_audio_path=kareoke_path,
-            video_width=width,
-            video_height=height,
-            output_video_path=None,
-        )
-        vocals_video_spec = build_video_spec(
-            transcription_path=transcription_path,
-            mux_audio_path=vocals_path,
-            video_width=width,
-            video_height=height,
-            output_video_path=None,
-        )
-        vocals_video_path = create_video_from_transcription(vocals_video_spec)
-        # kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
-        # print(f"Kareoke video: {kareoke_video_path}")
-        print(f"Vocals video:  {vocals_video_path}")
-
-        print("\nStep 6/6: Create vocals video metadata")
-        metadata_path = create_video_metadata_for_vocals(
-            vocals_audio_path=vocals_path,
-            song_name=song_name,
-            artist_name=artist_name,
-            language=metadata_language,
-        )
-        print(f"Video metadata: {metadata_path}")
-
-        print("\nPipeline completed successfully.")
-        print(f"Run name: {run_name}")
-        print(f"Run dir:  {run_dir}")
+        for index, config in enumerate(configs, start=1):
+            _run_single(config, index=index, total=len(configs))
         return 0
     except KeyboardInterrupt:
         print("\nInterrupted by user.", file=sys.stderr)
