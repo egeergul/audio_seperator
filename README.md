@@ -1,6 +1,6 @@
 # Audio Scraper CLI (Micro-Service Style)
 
-This project is a script-first audio pipeline with 7 independent CLI commands that hand off files by path.
+This project is a script-first audio pipeline with 8 independent CLI commands that hand off files by path.
 
 Canonical output root is:
 
@@ -29,6 +29,7 @@ python3 create_folder.py "Wild Flower"
 python3 scrape_audio.py "https://youtube.com/watch?v=..." "/absolute/path/to/.outputs/Wild_Flower"
 python3 seperate_audio.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_original.mp3"
 python3 extract_pitches.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
+python3 convert_pitch_json_to_midi.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals_pitches.json"
 python3 transcribe_audio.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
 python3 create_video_from_transcription.py \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
@@ -264,19 +265,47 @@ Parameters:
 
 Default output path:
 
-- `<audio_folder>/<run_name>_pitches.json` if `--output-json-path` is omitted.
+- JSON: `<audio_folder>/<audio_stem>_pitches.json` if `--output-json-path` is omitted.
 
 What it does:
 
 - Validates source audio file exists/readable.
 - Runs Basic Pitch inference and extracts note events.
 - Normalizes note events to millisecond note items with MIDI, note name, and Hz.
-- Writes the output JSON.
+- Writes output JSON.
 
 Under the hood:
 
 - `services.pitch.extract_note_pitches`
 - `services.pitch.write_pitch_json`
+
+### 8) `convert_pitch_json_to_midi.py`
+
+Usage:
+
+```bash
+python3 convert_pitch_json_to_midi.py <pitch_json_path> [--output-midi-path <path>]
+```
+
+Parameters:
+
+- `pitch_json_path` (required): source pitch JSON path, typically `<audio_stem>_pitches.json`.
+- `--output-midi-path` (optional): explicit output MIDI path.
+
+Default output path:
+
+- `<pitch_json_stem>.mid` if `--output-midi-path` is omitted.
+
+What it does:
+
+- Validates and loads pitch JSON.
+- Converts `notes[]` into a MIDI instrument track.
+- Writes output MIDI.
+
+Under the hood:
+
+- `services.pitch.read_pitch_json`
+- `services.pitch.write_pitch_midi`
 
 Output schema:
 
@@ -307,7 +336,8 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_vocals.mp3`
 - `<run_name>_kareoke.mp3`
 - `<run_name>_transcription.json`
-- `<run_name>_pitches.json` (when pitch extraction is used)
+- `<audio_stem>_pitches.json` (when pitch extraction is used)
+- `<audio_stem>_pitches.mid` (when pitch JSON to MIDI conversion is used)
 - `<run_name>.mp4` (default)
 - `<audio_stem>_waveform.png` (when waveform visualization is used)
 
@@ -318,7 +348,7 @@ There is currently no committed `tests/` directory in this checkout.
 Recommended smoke checks:
 
 ```bash
-python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py visualize_audio_wave.py extract_pitches.py services/*.py services/video/*.py
+python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py visualize_audio_wave.py extract_pitches.py convert_pitch_json_to_midi.py services/*.py services/video/*.py
 python3 create_folder.py --help
 python3 scrape_audio.py --help
 python3 seperate_audio.py --help
@@ -326,4 +356,5 @@ python3 transcribe_audio.py --help
 python3 create_video_from_transcription.py --help
 python3 visualize_audio_wave.py --help
 python3 extract_pitches.py --help
+python3 convert_pitch_json_to_midi.py --help
 ```

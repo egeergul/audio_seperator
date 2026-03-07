@@ -23,6 +23,7 @@ The project provides a file-handoff pipeline of independent scripts:
 5. Render MP4 with black background and timed captions, muxing kareoke audio.
 6. Optionally render a waveform PNG from any audio input.
 7. Optionally extract sung melody note events from audio with Basic Pitch.
+8. Optionally convert pitch JSON into a MIDI file.
 
 ## 3) Public CLI Contracts (Implemented)
 
@@ -184,7 +185,7 @@ Behavior:
 - Runs Basic Pitch inference and reads note events.
 - Normalizes note events to ms-based note objects:
   - `index`, `start_time_ms`, `end_time_ms`, `pitch_midi`, `note_name`, `pitch_hz`
-- Writes default output `<run_name>_pitches.json` beside input audio.
+- Writes default output `<audio_stem>_pitches.json` beside input audio.
 - Fails if output file already exists.
 
 Backed by:
@@ -192,12 +193,33 @@ Backed by:
 - `services.pitch.extract_note_pitches`
 - `services.pitch.write_pitch_json`
 
+### `convert_pitch_json_to_midi.py`
+
+Command:
+
+```bash
+python3 convert_pitch_json_to_midi.py <pitch_json_path> [--output-midi-path <path>]
+```
+
+Behavior:
+
+- Validates and loads pitch JSON input.
+- Converts `notes[]` entries into MIDI notes.
+- Writes default output `<pitch_json_stem>.mid` beside input JSON.
+- Fails if output file already exists.
+
+Backed by:
+
+- `services.pitch.read_pitch_json`
+- `services.pitch.write_pitch_midi`
+
 ## 4) Data Contracts
 
 ### Run name derivation
 
 - Run name always comes from parent folder basename.
-- This applies to download output names, separation outputs, transcription output name, pitch output name, and default video output name.
+- This applies to download output names, separation outputs, transcription output name, and default video output name.
+- Pitch output names derive from input audio stem (for example: `golden_vocals.mp3` -> `golden_vocals_pitches.json` / `.mid`).
 
 ### Output naming contract
 
@@ -207,7 +229,8 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_vocals.mp3`
 - `<run_name>_kareoke.mp3`
 - `<run_name>_transcription.json`
-- `<run_name>_pitches.json` (optional pitch extraction output)
+- `<audio_stem>_pitches.json` (optional pitch extraction output)
+- `<audio_stem>_pitches.mid` (optional pitch JSON to MIDI conversion output)
 - `<run_name>.mp4` (default video output)
 - `<audio_stem>_waveform.png` (optional waveform visualization output)
 
@@ -262,7 +285,7 @@ Top-level scripts are thin CLI wrappers only.
 - `services/transcription.py`
   - whisper loading, device selection, sentence chunking, ms conversion, JSON writing.
 - `services/pitch.py`
-  - Basic Pitch inference + note-event normalization + JSON writing.
+  - Basic Pitch inference + note-event normalization + JSON + MIDI writing.
 - `services/waveform.py`
   - ffmpeg decode + waveform envelope rendering to PNG.
 - `services/video/schema.py`
@@ -374,6 +397,7 @@ audio_scraper/
 ├── seperate_audio.py
 ├── transcribe_audio.py
 ├── extract_pitches.py
+├── convert_pitch_json_to_midi.py
 ├── create_video_from_transcription.py
 ├── visualize_audio_wave.py
 ├── vendor/audio_separation/
@@ -401,6 +425,7 @@ python3 create_folder.py "Wild Flower"
 python3 scrape_audio.py "https://youtube.com/watch?v=..." "/abs/path/to/.outputs/Wild_Flower"
 python3 seperate_audio.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_original.mp3"
 python3 extract_pitches.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
+python3 convert_pitch_json_to_midi.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals_pitches.json"
 python3 transcribe_audio.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
 python3 create_video_from_transcription.py \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \

@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Extract sung melody note events from an audio file using Basic Pitch "
-            "and write <run_name>_pitches.json beside the input."
+            "and write <audio_stem>_pitches.json beside the input."
         )
     )
     parser.add_argument("audio_path", help="Path to input audio file (for example: xxx_vocals.mp3)")
@@ -36,7 +36,7 @@ def run() -> int:
         )
 
         payload = extract_note_pitches(audio_path)
-        output_path = write_pitch_json(
+        output_json_path = write_pitch_json(
             audio_path=audio_path,
             payload=payload,
             output_path=output_json_path,
@@ -44,7 +44,7 @@ def run() -> int:
 
         print("Pitch extraction completed successfully.")
         print(f"Audio: {audio_path.resolve()}")
-        print(f"Output: {output_path}")
+        print(f"JSON: {output_json_path}")
         print(f"Notes: {payload.get('note_count', 0)}")
         return 0
     except KeyboardInterrupt:

@@ -29,6 +29,17 @@ def _import_basic_pitch_inference() -> tuple[Any, Any]:
     return predict, default_model_path
 
 
+def _import_pretty_midi() -> Any:
+    try:
+        import pretty_midi  # type: ignore
+    except Exception as exc:
+        raise EnvironmentError(
+            "Missing required Python package: pretty_midi. "
+            "Run: python -m pip install -r requirements.txt"
+        ) from exc
+    return pretty_midi
+
+
 def _run_basic_pitch_predict(predict: Any, audio_path: Path, model_path: Any) -> Any:
     audio = str(audio_path)
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
@@ -122,17 +133,29 @@ def _normalize_note_events(note_events: Any) -> list[dict[str, Any]]:
     return normalized
 
 
-def derive_run_name_from_audio(audio_path: Path) -> str:
-    parent_name = audio_path.resolve().parent.name.strip()
-    if not parent_name:
-        raise ValueError(f"Could not derive run name from path: {audio_path}")
-    return parent_name
-
-
 def derive_pitch_output_path(audio_path: Path) -> Path:
     resolved = audio_path.expanduser().resolve()
-    run_name = derive_run_name_from_audio(resolved)
-    return resolved.parent / f"{run_name}_pitches.json"
+    return resolved.parent / f"{resolved.stem}_pitches.json"
+
+
+def derive_pitch_midi_output_path(pitch_json_path: Path) -> Path:
+    resolved = pitch_json_path.expanduser().resolve()
+    return resolved.with_suffix(".mid")
+
+
+def _validate_output_target(output_path: Path) -> Path:
+    resolved_output_path = output_path.expanduser().resolve()
+    if resolved_output_path.exists():
+        raise FileExistsError(f"Output file already exists: {resolved_output_path}")
+    if not resolved_output_path.parent.is_dir():
+        raise FileNotFoundError(
+            f"Output folder does not exist: {resolved_output_path.parent}"
+        )
+    if not os.access(resolved_output_path.parent, os.W_OK):
+        raise PermissionError(
+            f"Output folder is not writable: {resolved_output_path.parent}"
+        )
+    return resolved_output_path
 
 
 def extract_note_pitches(audio_path: Path) -> dict[str, Any]:
@@ -159,24 +182,67 @@ def write_pitch_json(
     audio_path: Path, payload: dict[str, Any], output_path: Path | None = None
 ) -> Path:
     resolved_audio_path = audio_path.expanduser().resolve()
-    resolved_output_path = (
-        output_path.expanduser().resolve()
+    resolved_output_path = _validate_output_target(
+        output_path
         if output_path is not None
         else derive_pitch_output_path(resolved_audio_path)
     )
-    if resolved_output_path.exists():
-        raise FileExistsError(f"Output file already exists: {resolved_output_path}")
-    if not resolved_output_path.parent.is_dir():
-        raise FileNotFoundError(
-            f"Output folder does not exist: {resolved_output_path.parent}"
-        )
-    if not os.access(resolved_output_path.parent, os.W_OK):
-        raise PermissionError(
-            f"Output folder is not writable: {resolved_output_path.parent}"
-        )
 
     resolved_output_path.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    return resolved_output_path
+
+
+def read_pitch_json(pitch_json_path: Path) -> dict[str, Any]:
+    resolved_input_path = validate_readable_file(pitch_json_path)
+    try:
+        payload = json.loads(resolved_input_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON file: {resolved_input_path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"Expected top-level JSON object in pitch file: {resolved_input_path}"
+        )
+    return payload
+
+
+def write_pitch_midi(payload: dict[str, Any], output_midi_path: Path) -> Path:
+    pretty_midi = _import_pretty_midi()
+    resolved_output_path = _validate_output_target(output_midi_path)
+
+    notes = payload.get("notes")
+    if not isinstance(notes, list) or not notes:
+        raise ValueError("No notes found in pitch payload.")
+
+    midi = pretty_midi.PrettyMIDI()
+    instrument = pretty_midi.Instrument(program=0, name="Transcribed Notes")
+
+    for note_item in notes:
+        if not isinstance(note_item, dict):
+            continue
+        try:
+            pitch = int(note_item["pitch_midi"])
+            start = float(note_item["start_time_ms"]) / 1000.0
+            end = float(note_item["end_time_ms"]) / 1000.0
+        except (KeyError, TypeError, ValueError):
+            continue
+        if end <= start:
+            continue
+
+        pitch = max(0, min(127, pitch))
+        note = pretty_midi.Note(
+            velocity=100,
+            pitch=pitch,
+            start=start,
+            end=end,
+        )
+        instrument.notes.append(note)
+
+    if not instrument.notes:
+        raise ValueError("No valid notes found to write MIDI.")
+
+    midi.instruments.append(instrument)
+    midi.write(str(resolved_output_path))
     return resolved_output_path
