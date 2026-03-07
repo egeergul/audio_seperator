@@ -21,9 +21,10 @@ The project provides a file-handoff pipeline of independent scripts:
 3. Separate original audio into vocals + kareoke tracks.
 4. Transcribe vocals into millisecond chunks.
 5. Render MP4 with black background and timed captions, muxing kareoke audio.
-6. Optionally render a waveform PNG from any audio input.
-7. Optionally extract sung melody note events from audio with Basic Pitch.
-8. Optionally convert pitch JSON into a MIDI file.
+6. Create video metadata text (title/description/tags/pin comment) for the vocals track.
+7. Optionally render a waveform PNG from any audio input.
+8. Optionally extract sung melody note events from audio with Basic Pitch.
+9. Optionally convert pitch JSON into a MIDI file.
 
 ## 3) Public CLI Contracts (Implemented)
 
@@ -147,6 +148,26 @@ Backed by:
 - `services.video.create_video_from_transcription`
 - `services.video.build_ffmpeg_command`
 
+### `create_vocals_video_metadata.py`
+
+Command:
+
+```bash
+python3 create_vocals_video_metadata.py <song_name> <artist_name> <folder_path> [--language en|tr]
+```
+
+Behavior:
+
+- Validates the folder exists and finds `<run_name>_vocals.mp3` (or a single `*_vocals.mp3`).
+- Generates a video metadata text file using the selected language template.
+- Writes `<vocals_stem>_video_texts.txt` beside the vocals audio.
+- Fails if output file already exists.
+
+Backed by:
+
+- `services.video_metadata.find_vocals_audio_in_folder`
+- `services.video_metadata.create_video_metadata_for_vocals`
+
 ### `visualize_audio_wave.py`
 
 Command:
@@ -229,6 +250,7 @@ Inside `.outputs/<run_name>/`:
 - `<audio_stem>_pitches.mid` (optional pitch JSON to MIDI conversion output)
 - `<audio_stem>.mp4` (default video output)
 - `<audio_stem>_waveform.png` (optional waveform visualization output)
+- `<vocals_stem>_video_texts.txt` (optional video metadata output)
 
 ### Transcription JSON schema (ms)
 
@@ -284,6 +306,8 @@ Top-level scripts are thin CLI wrappers only.
   - Basic Pitch inference + note-event normalization + JSON + MIDI writing.
 - `services/waveform.py`
   - ffmpeg decode + waveform envelope rendering to PNG.
+- `services/video_metadata.py`
+  - video metadata template selection and file writing.
 - `services/video/schema.py`
   - transcription JSON validation and caption item parsing.
 - `services/video/spec.py`
@@ -381,6 +405,7 @@ audio_scraper/
 │   ├── transcription.py
 │   ├── pitch.py
 │   ├── waveform.py
+│   ├── video_metadata.py
 │   └── video/
 │       ├── __init__.py
 │       ├── schema.py
@@ -395,6 +420,7 @@ audio_scraper/
 ├── extract_pitches.py
 ├── convert_pitch_json_to_midi.py
 ├── create_video_from_transcription.py
+├── create_vocals_video_metadata.py
 ├── visualize_audio_wave.py
 ├── vendor/audio_separation/
 ├── models/
@@ -427,6 +453,7 @@ python3 create_video_from_transcription.py \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 python3 visualize_audio_wave.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
+python3 create_vocals_video_metadata.py "Golden" "Harry Styles" "/abs/path/to/.outputs/Wild_Flower" --language en
 ```
 
 ## 11) Recommendations for the Next Agent

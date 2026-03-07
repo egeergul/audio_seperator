@@ -1,6 +1,6 @@
 # Audio Scraper CLI (Micro-Service Style)
 
-This project is a script-first audio pipeline with 8 independent CLI commands that hand off files by path.
+This project is a script-first audio pipeline with 9 independent CLI commands that hand off files by path.
 
 Canonical output root is:
 
@@ -35,6 +35,7 @@ python3 create_video_from_transcription.py \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 python3 visualize_audio_wave.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
+python3 create_vocals_video_metadata.py "Golden" "Harry Styles" "/absolute/path/to/.outputs/Wild_Flower" --language en
 ```
 
 ## Script Reference
@@ -213,7 +214,33 @@ Under the hood:
 - `services.video.build_ffmpeg_command`
 - `services.video.create_video_from_transcription`
 
-### 6) `visualize_audio_wave.py`
+### 6) `create_vocals_video_metadata.py`
+
+Usage:
+
+```bash
+python3 create_vocals_video_metadata.py <song_name> <artist_name> <folder_path> [--language en|tr]
+```
+
+Parameters:
+
+- `song_name` (required): song name.
+- `artist_name` (required): artist name.
+- `folder_path` (required): folder containing `<run_name>_vocals.mp3`.
+- `--language` (optional, default `en`): template language key (`en`, `tr`).
+
+What it does:
+
+- Finds `<run_name>_vocals.mp3` in the provided folder (or a single `*_vocals.mp3`).
+- Generates a video metadata text file using the selected template language.
+- Writes: `<vocals_stem>_video_texts.txt` beside the vocals audio.
+
+Under the hood:
+
+- `services.video_metadata.find_vocals_audio_in_folder`
+- `services.video_metadata.create_video_metadata_for_vocals`
+
+### 7) `visualize_audio_wave.py`
 
 Usage:
 
@@ -247,7 +274,7 @@ Under the hood:
 
 - `services.waveform.create_audio_waveform_image`
 
-### 7) `extract_pitches.py`
+### 8) `extract_pitches.py`
 
 Usage:
 
@@ -276,7 +303,7 @@ Under the hood:
 - `services.pitch.extract_note_pitches`
 - `services.pitch.write_pitch_json`
 
-### 8) `convert_pitch_json_to_midi.py`
+### 9) `convert_pitch_json_to_midi.py`
 
 Usage:
 
@@ -337,6 +364,7 @@ Inside `.outputs/<run_name>/`:
 - `<audio_stem>_pitches.mid` (when pitch JSON to MIDI conversion is used)
 - `<audio_stem>.mp4` (default video naming)
 - `<audio_stem>_waveform.png` (when waveform visualization is used)
+- `<vocals_stem>_video_texts.txt` (when video metadata generation is used)
 
 ## Testing
 
@@ -345,12 +373,13 @@ There is currently no committed `tests/` directory in this checkout.
 Recommended smoke checks:
 
 ```bash
-python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py visualize_audio_wave.py extract_pitches.py convert_pitch_json_to_midi.py services/*.py services/video/*.py
+python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py create_vocals_video_metadata.py visualize_audio_wave.py extract_pitches.py convert_pitch_json_to_midi.py services/*.py services/video/*.py
 python3 create_folder.py --help
 python3 scrape_audio.py --help
 python3 seperate_audio.py --help
 python3 transcribe_audio.py --help
 python3 create_video_from_transcription.py --help
+python3 create_vocals_video_metadata.py --help
 python3 visualize_audio_wave.py --help
 python3 extract_pitches.py --help
 python3 convert_pitch_json_to_midi.py --help

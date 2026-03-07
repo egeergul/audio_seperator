@@ -9,6 +9,7 @@ from services.folder import create_normalized_run_folder
 from services.separation import seperate_audio
 from services.transcription import transcribe_audio, write_transcription_json
 from services.video import build_video_spec, create_video_from_transcription
+from services.video_metadata import create_video_metadata_for_vocals
 
 SUPPORTED_MODELS = [
     "tiny",
@@ -65,6 +66,15 @@ def _prompt_language() -> str | None:
     return language.strip() or None
 
 
+def _prompt_metadata_language() -> str:
+    language = _prompt_optional(
+        "Metadata language key (e.g. en, tr)",
+        default="en",
+    )
+    assert language is not None
+    return language.strip() or "en"
+
+
 def _prompt_device() -> str:
     while True:
         device = _prompt_optional("Device (auto/cpu/cuda)", default="auto")
@@ -93,23 +103,23 @@ def run() -> int:
     print("===========================")
 
     try:
-        print("\nStep 1/5: Create run folder")
+        print("\nStep 1/6: Create run folder")
         raw_folder_name = _prompt_non_empty("Folder name")
         run_dir = create_normalized_run_folder(raw_folder_name)
         run_name = run_dir.name
         print(f"Created: {run_dir}")
 
-        print("\nStep 2/5: Download audio")
+        print("\nStep 2/6: Download audio")
         youtube_url = _prompt_non_empty("YouTube URL")
         original_audio_path = download_youtube_audio(youtube_url, run_dir)
         print(f"Downloaded: {original_audio_path}")
 
-        print("\nStep 3/5: Separate vocals and kareoke")
+        print("\nStep 3/6: Separate vocals and kareoke")
         vocals_path, kareoke_path = seperate_audio(original_audio_path)
         print(f"Vocals:  {vocals_path}")
         print(f"Kareoke: {kareoke_path}")
 
-        print("\nStep 4/5: Transcribe vocals")
+        print("\nStep 4/6: Transcribe vocals")
         model_name = _prompt_model()
         language = _prompt_language()
         device = _prompt_device()
@@ -122,7 +132,7 @@ def run() -> int:
         transcription_path = write_transcription_json(vocals_path, transcription_payload)
         print(f"Transcription: {transcription_path}")
 
-        print("\nStep 5/5: Create lyric videos (kareoke + vocals)")
+        print("\nStep 5/6: Create lyric videos (kareoke + vocals)")
         width = _prompt_positive_int("Video width", default=1920)
         height = _prompt_positive_int("Video height", default=1080)
         kareoke_video_spec = build_video_spec(
@@ -143,6 +153,18 @@ def run() -> int:
         kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
         print(f"Kareoke video: {kareoke_video_path}")
         print(f"Vocals video:  {vocals_video_path}")
+
+        print("\nStep 6/6: Create vocals video metadata")
+        song_name = _prompt_non_empty("Song name")
+        artist_name = _prompt_non_empty("Artist name")
+        metadata_language = _prompt_metadata_language()
+        metadata_path = create_video_metadata_for_vocals(
+            vocals_audio_path=vocals_path,
+            song_name=song_name,
+            artist_name=artist_name,
+            language=metadata_language,
+        )
+        print(f"Video metadata: {metadata_path}")
 
         print("\nPipeline completed successfully.")
         print(f"Run name: {run_name}")
