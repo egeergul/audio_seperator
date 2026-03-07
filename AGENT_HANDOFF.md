@@ -9,6 +9,7 @@ This document is the single-source context file for future AI agents. It is writ
 - Canonical output root is `.outputs/` (hidden).
 - Spelling contract `kareoke` is intentionally preserved across scripts and outputs.
 - Legacy interactive orchestrator (`main.py`) is removed.
+- Full pipeline orchestrator exists in two forms: interactive (`run_full_pipeline.py`) and JSON-driven (`run_full_pipeline_w_json.py`).
 - Legacy JSON-video entry script (`video_from_json.py`) is no longer used; video flow is handled by `create_video_from_transcription.py` + `services/video/*`.
 - There is currently no committed `tests/` directory in this checkout.
 
@@ -230,6 +231,52 @@ Backed by:
 - `services.pitch.read_pitch_json`
 - `services.pitch.write_pitch_midi`
 
+### `run_full_pipeline.py`
+
+Command:
+
+```bash
+python3 run_full_pipeline.py
+```
+
+Behavior:
+
+- Runs the 6-step end-to-end flow: create folder, download, separate, transcribe, create lyric video, create metadata.
+- Prompts for all required values via terminal input.
+- Uses the same defaults as the individual scripts (model `small`, device `auto`, video 1920x1080, metadata language `en`).
+
+### `run_full_pipeline_w_json.py`
+
+Command:
+
+```bash
+python3 run_full_pipeline_w_json.py <config_json_path>
+```
+
+Behavior:
+
+- Runs the same 6-step flow as `run_full_pipeline.py`.
+- Reads all required values from a JSON config file (no interactive prompts).
+- Optional fields default to the same values as the interactive script.
+- Accepts `video_width`/`video_height` or `width`/`height`.
+
+Example JSON:
+
+```json
+{
+  "folder_name": "Wild Flower",
+  "youtube_url": "https://youtube.com/watch?v=...",
+  "model": "small",
+  "language": "en",
+  "device": "auto",
+  "video_width": 1920,
+  "video_height": 1080,
+  "song_name": "Golden",
+  "artist_name": "Harry Styles",
+  "metadata_language": "en"
+}
+```
+
 ## 4) Data Contracts
 
 ### Run name derivation
@@ -422,6 +469,8 @@ audio_scraper/
 ├── create_video_from_transcription.py
 ├── create_vocals_video_metadata.py
 ├── visualize_audio_wave.py
+├── run_full_pipeline.py
+├── run_full_pipeline_w_json.py
 ├── vendor/audio_separation/
 ├── models/
 ├── .outputs/
@@ -454,6 +503,12 @@ python3 create_video_from_transcription.py \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 python3 visualize_audio_wave.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
 python3 create_vocals_video_metadata.py "Golden" "Harry Styles" "/abs/path/to/.outputs/Wild_Flower" --language en
+```
+
+JSON-driven full pipeline alternative:
+
+```bash
+python3 run_full_pipeline_w_json.py "/abs/path/to/pipeline_config.json"
 ```
 
 ## 11) Recommendations for the Next Agent

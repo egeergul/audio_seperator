@@ -103,14 +103,24 @@ def run() -> int:
     print("===========================")
 
     try:
-        print("\nStep 1/6: Create run folder")
+        print("\nCollecting required inputs")
         raw_folder_name = _prompt_non_empty("Folder name")
+        youtube_url = _prompt_non_empty("YouTube URL")
+        model_name = _prompt_model()
+        language = _prompt_language()
+        device = _prompt_device()
+        width = _prompt_positive_int("Video width", default=1920)
+        height = _prompt_positive_int("Video height", default=1080)
+        song_name = _prompt_non_empty("Song name")
+        artist_name = _prompt_non_empty("Artist name")
+        metadata_language = _prompt_metadata_language()
+
+        print("\nStep 1/6: Create run folder")
         run_dir = create_normalized_run_folder(raw_folder_name)
         run_name = run_dir.name
         print(f"Created: {run_dir}")
 
         print("\nStep 2/6: Download audio")
-        youtube_url = _prompt_non_empty("YouTube URL")
         original_audio_path = download_youtube_audio(youtube_url, run_dir)
         print(f"Downloaded: {original_audio_path}")
 
@@ -120,9 +130,6 @@ def run() -> int:
         print(f"Kareoke: {kareoke_path}")
 
         print("\nStep 4/6: Transcribe vocals")
-        model_name = _prompt_model()
-        language = _prompt_language()
-        device = _prompt_device()
         transcription_payload = transcribe_audio(
             audio_path=vocals_path,
             model_name=model_name,
@@ -133,8 +140,6 @@ def run() -> int:
         print(f"Transcription: {transcription_path}")
 
         print("\nStep 5/6: Create lyric videos (kareoke + vocals)")
-        width = _prompt_positive_int("Video width", default=1920)
-        height = _prompt_positive_int("Video height", default=1080)
         kareoke_video_spec = build_video_spec(
             transcription_path=transcription_path,
             mux_audio_path=kareoke_path,
@@ -155,9 +160,6 @@ def run() -> int:
         print(f"Vocals video:  {vocals_video_path}")
 
         print("\nStep 6/6: Create vocals video metadata")
-        song_name = _prompt_non_empty("Song name")
-        artist_name = _prompt_non_empty("Artist name")
-        metadata_language = _prompt_metadata_language()
         metadata_path = create_video_metadata_for_vocals(
             vocals_audio_path=vocals_path,
             song_name=song_name,
