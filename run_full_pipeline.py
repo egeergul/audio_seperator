@@ -150,8 +150,8 @@ def run() -> int:
             output_video_path=None,
         )
         vocals_video_path = create_video_from_transcription(vocals_video_spec)
-        kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
-        print(f"Kareoke video: {kareoke_video_path}")
+        # kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
+        #print(f"Kareoke video: {kareoke_video_path}")
         print(f"Vocals video:  {vocals_video_path}")
 
         print("\nStep 6/6: Create vocals video metadata")
