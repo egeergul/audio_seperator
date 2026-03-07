@@ -139,8 +139,8 @@ def run() -> int:
             video_height=height,
             output_video_path=None,
         )
-        kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
         vocals_video_path = create_video_from_transcription(vocals_video_spec)
+        kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
         print(f"Kareoke video: {kareoke_video_path}")
         print(f"Vocals video:  {vocals_video_path}")
 
