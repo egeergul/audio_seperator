@@ -128,16 +128,16 @@ Backed by:
 Command:
 
 ```bash
-python3 create_video_from_transcription.py <transcription_json_path> <vocals_audio_path> <kareoke_audio_path> [--width 1920] [--height 1080] [--output-video-path <path>]
+python3 create_video_from_transcription.py <transcription_json_path> <audio_path> [--width 1920] [--height 1080] [--output-video-path <path>]
 ```
 
 Behavior:
 
 - Validates transcription JSON format against ms-chunk schema.
-- Validates both audio paths are readable.
-- Uses `kareoke_audio_path` as muxed output audio track.
+- Validates audio path is readable.
+- Uses provided `audio_path` as muxed output audio track.
 - Uses chunk `start_time_ms`/`end_time_ms` to build ffmpeg overlay windows.
-- Default output path: `<run_name>.mp4` beside transcription file.
+- Default output path: `<audio_stem>.mp4` beside transcription file.
 - Generates black background + centered dynamic captions rendered via Pillow.
 
 Backed by:
@@ -146,10 +146,6 @@ Backed by:
 - `services.video.load_transcription_chunks`
 - `services.video.create_video_from_transcription`
 - `services.video.build_ffmpeg_command`
-
-Note:
-
-- `vocals_audio_path` is validated and stored in the spec, but kareoke path is the muxed audio input.
 
 ### `visualize_audio_wave.py`
 
@@ -231,7 +227,7 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_transcription.json`
 - `<audio_stem>_pitches.json` (optional pitch extraction output)
 - `<audio_stem>_pitches.mid` (optional pitch JSON to MIDI conversion output)
-- `<run_name>.mp4` (default video output)
+- `<audio_stem>.mp4` (default video output)
 - `<audio_stem>_waveform.png` (optional waveform visualization output)
 
 ### Transcription JSON schema (ms)
@@ -412,7 +408,7 @@ audio_scraper/
 
 - `kareoke` spelling is intentional contract; do not normalize to `karaoke` unless explicitly requested.
 - No overwrite mode: scripts fail on conflicting targets.
-- `create_video_from_transcription.py` requires both vocals and kareoke args by contract even though kareoke is muxed audio source.
+- `create_video_from_transcription.py` accepts one mux audio arg and derives default output from that audio stem.
 - Whisper model downloads can cause first-run latency.
 - Basic Pitch model download can cause first-run latency.
 - Separation first-run latency can be high depending on model availability and hardware.
@@ -429,7 +425,6 @@ python3 convert_pitch_json_to_midi.py "/abs/path/to/.outputs/Wild_Flower/Wild_Fl
 python3 transcribe_audio.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
 python3 create_video_from_transcription.py \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
-  "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 python3 visualize_audio_wave.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
 ```

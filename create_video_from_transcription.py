@@ -12,15 +12,17 @@ from services.video import build_video_spec, create_video_from_transcription
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Create a lyric video from <run_name>_transcription.json and audio paths."
+            "Create a lyric video from <run_name>_transcription.json and a mux audio path."
         )
     )
     parser.add_argument(
         "transcription_json_path",
         help="Path to <run_name>_transcription.json",
     )
-    parser.add_argument("vocals_audio_path", help="Path to <run_name>_vocals.mp3")
-    parser.add_argument("kareoke_audio_path", help="Path to <run_name>_kareoke.mp3")
+    parser.add_argument(
+        "audio_path",
+        help="Path to mux audio (e.g. <run_name>_kareoke.mp3 or <run_name>_vocals.mp3)",
+    )
     parser.add_argument(
         "--width",
         type=int,
@@ -36,7 +38,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-video-path",
         default=None,
-        help="Optional output video path (default: <run_name>.mp4 next to transcription)",
+        help=(
+            "Optional output video path "
+            "(default: <mux_audio_stem>.mp4 next to transcription)"
+        ),
     )
     return parser.parse_args()
 
@@ -51,8 +56,7 @@ def run() -> int:
         )
         spec = build_video_spec(
             transcription_path=Path(args.transcription_json_path).expanduser(),
-            vocals_audio_path=Path(args.vocals_audio_path).expanduser(),
-            kareoke_audio_path=Path(args.kareoke_audio_path).expanduser(),
+            mux_audio_path=Path(args.audio_path).expanduser(),
             video_width=args.width,
             video_height=args.height,
             output_video_path=output_video_path,

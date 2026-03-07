@@ -33,7 +33,6 @@ python3 convert_pitch_json_to_midi.py "/absolute/path/to/.outputs/Wild_Flower/Wi
 python3 transcribe_audio.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
 python3 create_video_from_transcription.py \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
-  "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_kareoke.mp3"
 python3 visualize_audio_wave.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
 ```
@@ -182,8 +181,7 @@ Usage:
 ```bash
 python3 create_video_from_transcription.py \
   <transcription_json_path> \
-  <vocals_audio_path> \
-  <kareoke_audio_path> \
+  <audio_path> \
   [--width 1920] \
   [--height 1080] \
   [--output-video-path <path>]
@@ -192,22 +190,21 @@ python3 create_video_from_transcription.py \
 Parameters:
 
 - `transcription_json_path` (required): path to `<run_name>_transcription.json`.
-- `vocals_audio_path` (required): vocals path (validated as readable; part of contract).
-- `kareoke_audio_path` (required): kareoke path (used as muxed audio track).
+- `audio_path` (required): mux audio path to include in output (e.g. `<run_name>_kareoke.mp3` or `<run_name>_vocals.mp3`).
 - `--width` (optional, default `1920`): output width.
 - `--height` (optional, default `1080`): output height.
 - `--output-video-path` (optional): explicit output path.
 
 Default output path:
 
-- `<folder>/<run_name>.mp4` if `--output-video-path` is omitted.
+- `<folder>/<audio_stem>.mp4` if `--output-video-path` is omitted.
 
 What it does:
 
 - Validates transcription JSON shape (`chunks[].start_time_ms`, `chunks[].end_time_ms`, `chunks[].text`).
 - Renders caption PNG overlays with Pillow (centered, dynamic font sizing).
 - Builds ffmpeg filter graph with `enable=between(t,start,end)` using ms timings.
-- Produces black-background MP4 with kareoke audio.
+- Produces black-background MP4 with the provided audio.
 
 Under the hood:
 
@@ -338,7 +335,7 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_transcription.json`
 - `<audio_stem>_pitches.json` (when pitch extraction is used)
 - `<audio_stem>_pitches.mid` (when pitch JSON to MIDI conversion is used)
-- `<run_name>.mp4` (default)
+- `<audio_stem>.mp4` (default video naming)
 - `<audio_stem>_waveform.png` (when waveform visualization is used)
 
 ## Testing

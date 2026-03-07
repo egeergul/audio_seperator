@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from services.download import download_youtube_audio
 from services.folder import create_normalized_run_folder
@@ -123,26 +122,27 @@ def run() -> int:
         transcription_path = write_transcription_json(vocals_path, transcription_payload)
         print(f"Transcription: {transcription_path}")
 
-        print("\nStep 5/5: Create lyric video")
+        print("\nStep 5/5: Create lyric videos (kareoke + vocals)")
         width = _prompt_positive_int("Video width", default=1920)
         height = _prompt_positive_int("Video height", default=1080)
-        output_video_raw = _prompt_optional(
-            "Output video path (optional; blank uses default <run_name>.mp4)",
-            default=None,
-        )
-        output_video_path = (
-            Path(output_video_raw).expanduser() if output_video_raw is not None else None
-        )
-        video_spec = build_video_spec(
+        kareoke_video_spec = build_video_spec(
             transcription_path=transcription_path,
-            vocals_audio_path=vocals_path,
-            kareoke_audio_path=kareoke_path,
+            mux_audio_path=kareoke_path,
             video_width=width,
             video_height=height,
-            output_video_path=output_video_path,
+            output_video_path=None,
         )
-        created_video_path = create_video_from_transcription(video_spec)
-        print(f"Video: {created_video_path}")
+        vocals_video_spec = build_video_spec(
+            transcription_path=transcription_path,
+            mux_audio_path=vocals_path,
+            video_width=width,
+            video_height=height,
+            output_video_path=None,
+        )
+        kareoke_video_path = create_video_from_transcription(kareoke_video_spec)
+        vocals_video_path = create_video_from_transcription(vocals_video_spec)
+        print(f"Kareoke video: {kareoke_video_path}")
+        print(f"Vocals video:  {vocals_video_path}")
 
         print("\nPipeline completed successfully.")
         print(f"Run name: {run_name}")
@@ -158,4 +158,3 @@ def run() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(run())
-

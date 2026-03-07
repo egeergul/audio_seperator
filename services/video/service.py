@@ -16,7 +16,7 @@ from .spec import VideoSpec
 def create_video_from_transcription(spec: VideoSpec) -> Path:
     check_video_prerequisites()
     spec.output_video_path.parent.mkdir(parents=True, exist_ok=True)
-    duration_seconds = probe_audio_duration_seconds(spec.kareoke_audio_path)
+    duration_seconds = probe_audio_duration_seconds(spec.mux_audio_path)
 
     with tempfile.TemporaryDirectory(prefix="video_overlays_") as tmp_dir:
         overlay_dir = Path(tmp_dir)
@@ -34,4 +34,3 @@ def create_video_from_transcription(spec: VideoSpec) -> Path:
         run_ffmpeg_command(cmd)
 
     return spec.output_video_path
-

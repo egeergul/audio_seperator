@@ -72,7 +72,7 @@ def build_ffmpeg_command(
         "-i",
         color_input,
         "-i",
-        str(spec.kareoke_audio_path),
+        str(spec.mux_audio_path),
     ]
 
     for overlay_path in overlays:
@@ -130,4 +130,3 @@ def run_ffmpeg_command(cmd: list[str]) -> None:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as exc:
         raise RuntimeError("ffmpeg command failed. See logs above for details.") from exc
-
