@@ -38,10 +38,9 @@ python3 visualize_audio_wave.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flo
 python3 create_vocals_video_metadata.py "Golden" "Harry Styles" "/absolute/path/to/.outputs/Wild_Flower" --language en
 ```
 
-You can also run the same flow with the full pipeline orchestrators:
+You can also run the same flow with the full pipeline orchestrator:
 
 ```bash
-python3 run_full_pipeline.py
 python3 run_full_pipeline_w_json.py "/absolute/path/to/pipeline_config.json"
 ```
 
@@ -68,20 +67,7 @@ Notes:
 - Defaults: `model=small`, `language=null` (auto-detect), `device=auto`, `video_width=1920`, `video_height=1080`, `metadata_language=en`.
 - `video_width`/`video_height` can also be provided as `width`/`height`.
 
-## Full Pipeline Orchestrators
-
-### `run_full_pipeline.py`
-
-Usage:
-
-```bash
-python3 run_full_pipeline.py
-```
-
-What it does:
-
-- Runs the same 6-step flow as the end-to-end commands.
-- Prompts for every required value via terminal input.
+## Full Pipeline Orchestrator
 
 ### `run_full_pipeline_w_json.py`
 
@@ -93,7 +79,7 @@ python3 run_full_pipeline_w_json.py <config_json_path>
 
 What it does:
 
-- Runs the same 6-step flow as `run_full_pipeline.py`.
+- Runs the same 6-step flow as the end-to-end commands.
 - Reads all required values from a JSON config file (no interactive prompts).
 
 ## Script Reference
@@ -431,7 +417,7 @@ There is currently no committed `tests/` directory in this checkout.
 Recommended smoke checks:
 
 ```bash
-python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py create_vocals_video_metadata.py visualize_audio_wave.py extract_pitches.py convert_pitch_json_to_midi.py run_full_pipeline.py run_full_pipeline_w_json.py services/*.py services/video/*.py
+python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py create_vocals_video_metadata.py visualize_audio_wave.py extract_pitches.py convert_pitch_json_to_midi.py run_full_pipeline_w_json.py services/*.py services/video/*.py
 python3 create_folder.py --help
 python3 scrape_audio.py --help
 python3 seperate_audio.py --help
