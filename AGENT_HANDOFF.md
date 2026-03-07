@@ -22,6 +22,7 @@ The project provides a file-handoff pipeline of independent scripts:
 4. Transcribe vocals into millisecond chunks.
 5. Render MP4 with black background and timed captions, muxing kareoke audio.
 6. Optionally render a waveform PNG from any audio input.
+7. Optionally extract sung melody note events from audio with Basic Pitch.
 
 ## 3) Public CLI Contracts (Implemented)
 
@@ -169,12 +170,34 @@ Backed by:
 
 - `services.waveform.create_audio_waveform_image`
 
+### `extract_pitches.py`
+
+Command:
+
+```bash
+python3 extract_pitches.py <audio_path> [--output-json-path <path>]
+```
+
+Behavior:
+
+- Validates input audio file exists and is readable.
+- Runs Basic Pitch inference and reads note events.
+- Normalizes note events to ms-based note objects:
+  - `index`, `start_time_ms`, `end_time_ms`, `pitch_midi`, `note_name`, `pitch_hz`
+- Writes default output `<run_name>_pitches.json` beside input audio.
+- Fails if output file already exists.
+
+Backed by:
+
+- `services.pitch.extract_note_pitches`
+- `services.pitch.write_pitch_json`
+
 ## 4) Data Contracts
 
 ### Run name derivation
 
 - Run name always comes from parent folder basename.
-- This applies to download output names, separation outputs, transcription output name, and default video output name.
+- This applies to download output names, separation outputs, transcription output name, pitch output name, and default video output name.
 
 ### Output naming contract
 
@@ -184,6 +207,7 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_vocals.mp3`
 - `<run_name>_kareoke.mp3`
 - `<run_name>_transcription.json`
+- `<run_name>_pitches.json` (optional pitch extraction output)
 - `<run_name>.mp4` (default video output)
 - `<audio_stem>_waveform.png` (optional waveform visualization output)
 
@@ -237,6 +261,8 @@ Top-level scripts are thin CLI wrappers only.
   - separation prerequisites, demix orchestration, rename contract.
 - `services/transcription.py`
   - whisper loading, device selection, sentence chunking, ms conversion, JSON writing.
+- `services/pitch.py`
+  - Basic Pitch inference + note-event normalization + JSON writing.
 - `services/waveform.py`
   - ffmpeg decode + waveform envelope rendering to PNG.
 - `services/video/schema.py`
@@ -308,6 +334,7 @@ From `requirements.txt`:
 - `yt-dlp`
 - `Pillow`
 - `openai-whisper`
+- `basic-pitch`
 
 System tools required:
 
@@ -319,6 +346,7 @@ Notes:
 - `services.separation.check_separation_prerequisites` explicitly checks `ffmpeg`, `torchcodec`, `packaging`.
 - `services.video.check_video_prerequisites` checks `ffmpeg` and `ffprobe`.
 - `services.waveform.check_waveform_prerequisites` checks `ffmpeg`.
+- `basic-pitch` currently works with Python 3.11 or lower in this setup; Python 3.14 install fails due upstream dependency constraints.
 
 ## 8) Repository Layout (Relevant)
 
@@ -332,6 +360,7 @@ audio_scraper/
 │   ├── download.py
 │   ├── separation.py
 │   ├── transcription.py
+│   ├── pitch.py
 │   ├── waveform.py
 │   └── video/
 │       ├── __init__.py
@@ -344,6 +373,7 @@ audio_scraper/
 ├── scrape_audio.py
 ├── seperate_audio.py
 ├── transcribe_audio.py
+├── extract_pitches.py
 ├── create_video_from_transcription.py
 ├── visualize_audio_wave.py
 ├── vendor/audio_separation/
@@ -360,6 +390,7 @@ audio_scraper/
 - No overwrite mode: scripts fail on conflicting targets.
 - `create_video_from_transcription.py` requires both vocals and kareoke args by contract even though kareoke is muxed audio source.
 - Whisper model downloads can cause first-run latency.
+- Basic Pitch model download can cause first-run latency.
 - Separation first-run latency can be high depending on model availability and hardware.
 - Caption rendering needs a scalable TTF font (`DejaVuSans-Bold.ttf` or macOS Arial fallback paths).
 
@@ -369,6 +400,7 @@ audio_scraper/
 python3 create_folder.py "Wild Flower"
 python3 scrape_audio.py "https://youtube.com/watch?v=..." "/abs/path/to/.outputs/Wild_Flower"
 python3 seperate_audio.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_original.mp3"
+python3 extract_pitches.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
 python3 transcribe_audio.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
 python3 create_video_from_transcription.py \
   "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
@@ -386,3 +418,4 @@ python3 visualize_audio_wave.py "/abs/path/to/.outputs/Wild_Flower/Wild_Flower_v
 5. Maintain `.outputs/` as canonical output root unless user requests a breaking change.
 6. Run compile/help smoke checks after behavior changes.
 7. For waveform changes, keep ffmpeg decode and Pillow render responsibilities in `services/waveform.py` (thin CLI wrapper only).
+8. For pitch extraction changes, keep Basic Pitch-specific parsing and output normalization in `services/pitch.py` (thin CLI wrapper only).

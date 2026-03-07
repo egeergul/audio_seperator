@@ -1,6 +1,6 @@
 # Audio Scraper CLI (Micro-Service Style)
 
-This project is a script-first audio pipeline with 6 independent CLI commands that hand off files by path.
+This project is a script-first audio pipeline with 7 independent CLI commands that hand off files by path.
 
 Canonical output root is:
 
@@ -10,7 +10,7 @@ The `kareoke` spelling is intentional and part of the file contract.
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10+ (for `basic-pitch`, use Python 3.11 or lower)
 - `ffmpeg` and `ffprobe` on `PATH`
 
 Install Python dependencies:
@@ -28,6 +28,7 @@ python -m pip install -r requirements.txt
 python3 create_folder.py "Wild Flower"
 python3 scrape_audio.py "https://youtube.com/watch?v=..." "/absolute/path/to/.outputs/Wild_Flower"
 python3 seperate_audio.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_original.mp3"
+python3 extract_pitches.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3"
 python3 transcribe_audio.py "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_vocals.mp3" --model small --device auto
 python3 create_video_from_transcription.py \
   "/absolute/path/to/.outputs/Wild_Flower/Wild_Flower_transcription.json" \
@@ -248,6 +249,56 @@ Under the hood:
 
 - `services.waveform.create_audio_waveform_image`
 
+### 7) `extract_pitches.py`
+
+Usage:
+
+```bash
+python3 extract_pitches.py <audio_path> [--output-json-path <path>]
+```
+
+Parameters:
+
+- `audio_path` (required): source audio file path, typically `<run_name>_vocals.mp3`.
+- `--output-json-path` (optional): explicit output JSON path.
+
+Default output path:
+
+- `<audio_folder>/<run_name>_pitches.json` if `--output-json-path` is omitted.
+
+What it does:
+
+- Validates source audio file exists/readable.
+- Runs Basic Pitch inference and extracts note events.
+- Normalizes note events to millisecond note items with MIDI, note name, and Hz.
+- Writes the output JSON.
+
+Under the hood:
+
+- `services.pitch.extract_note_pitches`
+- `services.pitch.write_pitch_json`
+
+Output schema:
+
+```json
+{
+  "source_audio": "/abs/path/to/<run_name>_vocals.mp3",
+  "model": "basic-pitch",
+  "created_at": "2026-03-07T00:00:00+00:00",
+  "note_count": 2,
+  "notes": [
+    {
+      "index": 0,
+      "start_time_ms": 120,
+      "end_time_ms": 680,
+      "pitch_midi": 69,
+      "note_name": "A4",
+      "pitch_hz": 440.0
+    }
+  ]
+}
+```
+
 ## Output File Contract
 
 Inside `.outputs/<run_name>/`:
@@ -256,6 +307,7 @@ Inside `.outputs/<run_name>/`:
 - `<run_name>_vocals.mp3`
 - `<run_name>_kareoke.mp3`
 - `<run_name>_transcription.json`
+- `<run_name>_pitches.json` (when pitch extraction is used)
 - `<run_name>.mp4` (default)
 - `<audio_stem>_waveform.png` (when waveform visualization is used)
 
@@ -266,11 +318,12 @@ There is currently no committed `tests/` directory in this checkout.
 Recommended smoke checks:
 
 ```bash
-python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py visualize_audio_wave.py services/*.py services/video/*.py
+python3 -m py_compile create_folder.py scrape_audio.py seperate_audio.py transcribe_audio.py create_video_from_transcription.py visualize_audio_wave.py extract_pitches.py services/*.py services/video/*.py
 python3 create_folder.py --help
 python3 scrape_audio.py --help
 python3 seperate_audio.py --help
 python3 transcribe_audio.py --help
 python3 create_video_from_transcription.py --help
 python3 visualize_audio_wave.py --help
+python3 extract_pitches.py --help
 ```
