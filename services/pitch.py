@@ -11,15 +11,37 @@ from typing import Any, Sequence
 from .common import validate_readable_file
 
 
-def _import_basic_pitch_predict():
+def _import_basic_pitch_inference() -> tuple[Any, Any]:
     try:
-        from basic_pitch.inference import predict  # type: ignore
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+            io.StringIO()
+        ):
+            from basic_pitch import inference  # type: ignore
     except Exception as exc:
         raise EnvironmentError(
             "Missing required Python package: basic-pitch. "
             "Run: python -m pip install -r requirements.txt"
         ) from exc
-    return predict
+    predict = getattr(inference, "predict", None)
+    if predict is None:
+        raise RuntimeError("basic-pitch import succeeded but predict() was not found.")
+    default_model_path = getattr(inference, "ICASSP_2022_MODEL_PATH", None)
+    return predict, default_model_path
+
+
+def _run_basic_pitch_predict(predict: Any, audio_path: Path, model_path: Any) -> Any:
+    audio = str(audio_path)
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+        io.StringIO()
+    ):
+        if model_path is not None:
+            try:
+                return predict(audio, model_path)
+            except TypeError as exc:
+                if "positional argument" not in str(exc):
+                    raise
+                return predict(audio)
+        return predict(audio)
 
 
 def _midi_to_note_name(pitch_midi: int) -> str:
@@ -115,12 +137,13 @@ def derive_pitch_output_path(audio_path: Path) -> Path:
 
 def extract_note_pitches(audio_path: Path) -> dict[str, Any]:
     resolved_audio_path = validate_readable_file(audio_path)
-    predict = _import_basic_pitch_predict()
+    predict, default_model_path = _import_basic_pitch_inference()
 
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
-        io.StringIO()
-    ):
-        _, _, note_events = predict(str(resolved_audio_path))
+    _, _, note_events = _run_basic_pitch_predict(
+        predict=predict,
+        audio_path=resolved_audio_path,
+        model_path=default_model_path,
+    )
     notes = _normalize_note_events(note_events)
 
     return {
