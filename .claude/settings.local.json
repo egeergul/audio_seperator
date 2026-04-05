@@ -5,7 +5,8 @@
       "Bash(pip list:*)",
       "Bash(source /Users/egeergul/Desktop/audio_scraper/.venv/bin/activate)",
       "Bash(python3 -c \":*)",
-      "Bash(/Users/egeergul/Desktop/audio_scraper/.venv/bin/python --version)"
+      "Bash(/Users/egeergul/Desktop/audio_scraper/.venv/bin/python --version)",
+      "Bash(pip install:*)"
     ]
   }
 }
