@@ -27,7 +27,7 @@ from ui.widgets.file_picker import FilePicker
 
 
 class _OperationCard(QGroupBox):
-    run_clicked = Signal(str, dict)  # operation_name, params
+    run_clicked = Signal(str, object)  # operation_name, params
 
     def __init__(self, title: str, op_name: str, parent: QWidget | None = None):
         super().__init__(title, parent)
@@ -118,7 +118,7 @@ class _OperationCard(QGroupBox):
 
 
 class OperationsTab(QWidget):
-    operation_requested = Signal(str, dict)
+    operation_requested = Signal(str, object)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)

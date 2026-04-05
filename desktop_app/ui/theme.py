@@ -3,7 +3,7 @@ def get_dark_theme() -> str:
     QWidget {
         background-color: #1e1e2e;
         color: #e0e0e0;
-        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        font-family: "Helvetica Neue", "Helvetica", Arial, sans-serif;
         font-size: 13px;
     }
 
@@ -163,7 +163,7 @@ def get_dark_theme() -> str:
         border: 1px solid #3a3a4c;
         border-radius: 6px;
         color: #c0d0c0;
-        font-family: "SF Mono", "Menlo", "Consolas", monospace;
+        font-family: "Menlo", "Consolas", monospace;
         font-size: 12px;
         padding: 8px;
     }

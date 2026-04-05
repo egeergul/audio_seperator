@@ -26,7 +26,7 @@ from core.pipeline import (
 
 
 class PipelineTab(QWidget):
-    run_requested = Signal(PipelineConfig)
+    run_requested = Signal(object)
     cancel_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
