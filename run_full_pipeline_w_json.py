@@ -161,9 +161,9 @@ def _run_single(config: dict[str, Any], index: int, total: int) -> None:
     youtube_upload = config.get("youtube_upload", False)
     if not isinstance(youtube_upload, bool):
         raise ValueError("Field 'youtube_upload' must be a boolean.")
-    privacy_status = _get_optional_str(config, "privacy_status", default="private")
+    privacy_status = _get_optional_str(config, "privacy_status", default="public")
     if privacy_status is None:
-        privacy_status = "private"
+        privacy_status = "public"
 
     if total > 1:
         print(f"\n=== Run {index}/{total} ===")

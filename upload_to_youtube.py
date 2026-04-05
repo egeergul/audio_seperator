@@ -22,8 +22,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--privacy",
         choices=["private", "unlisted", "public"],
-        default="private",
-        help="Privacy status for the uploaded video (default: private).",
+        default="public",
+        help="Privacy status for the uploaded video (default: public).",
     )
     return parser.parse_args()
 

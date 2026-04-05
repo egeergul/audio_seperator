@@ -102,7 +102,7 @@ def authenticate_youtube(
 def upload_video_to_youtube(
     video_file_path: Path,
     metadata_text_path: Path,
-    privacy_status: str = "private",
+    privacy_status: str = "public",
     client_secrets_path: Path | None = None,
     token_path: Path | None = None,
 ) -> str:
