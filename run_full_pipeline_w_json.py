@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Iterable
@@ -231,6 +232,16 @@ def _run_single(config: dict[str, Any], index: int, total: int) -> None:
         )
         print(f"YouTube video ID: {video_id}")
         print(f"YouTube URL: https://www.youtube.com/watch?v={video_id}")
+
+        released_dir = run_dir.parent.parent / ".released"
+        released_dir.mkdir(parents=True, exist_ok=True)
+        dest = released_dir / run_dir.name
+        if dest.exists():
+            print(f"Warning: {dest} already exists in .released, skipping move.")
+        else:
+            shutil.move(str(run_dir), str(dest))
+            print(f"Moved: {run_dir} -> {dest}")
+            run_dir = dest
     else:
         print("\nStep 7/7: YouTube upload skipped (youtube_upload not set)")
 
