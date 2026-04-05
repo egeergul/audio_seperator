@@ -1,0 +1,18 @@
+Collecting PySide6
+  Downloading pyside6-6.11.0-cp310-abi3-macosx_13_0_universal2.whl.metadata (5.3 kB)
+Collecting shiboken6==6.11.0 (from PySide6)
+  Downloading shiboken6-6.11.0-cp310-abi3-macosx_13_0_universal2.whl.metadata (2.4 kB)
+Collecting PySide6_Essentials==6.11.0 (from PySide6)
+  Downloading pyside6_essentials-6.11.0-cp310-abi3-macosx_13_0_universal2.whl.metadata (3.6 kB)
+Collecting PySide6_Addons==6.11.0 (from PySide6)
+  Downloading pyside6_addons-6.11.0-cp310-abi3-macosx_13_0_universal2.whl.metadata (4.0 kB)
+Downloading pyside6-6.11.0-cp310-abi3-macosx_13_0_universal2.whl (571 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 571.5/571.5 kB 1.3 MB/s  0:00:00
+Downloading pyside6_addons-6.11.0-cp310-abi3-macosx_13_0_universal2.whl (331.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 331.6/331.6 MB 646.7 kB/s  0:15:36
+Downloading pyside6_essentials-6.11.0-cp310-abi3-macosx_13_0_universal2.whl (108.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 108.1/108.1 MB 205.4 kB/s  0:07:09
+Downloading shiboken6-6.11.0-cp310-abi3-macosx_13_0_universal2.whl (476 kB)
+Installing collected packages: shiboken6, PySide6_Essentials, PySide6_Addons, PySide6
+
+Successfully installed PySide6-6.11.0 PySide6_Addons-6.11.0 PySide6_Essentials-6.11.0 shiboken6-6.11.0

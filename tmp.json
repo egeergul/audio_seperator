@@ -1,14 +1,28 @@
 [
     {
-        "folder_name": "wildflower",
-        "youtube_url": "https://www.youtube.com/watch?v=ahuwiki7G5g&list=RDahuwiki7G5g&start_radio=1",
+        "folder_name": "round and round",
+        "youtube_url": "https://www.youtube.com/watch?v=iEU68sIps9g&list=RDiEU68sIps9g&start_radio=1",
         "model": "medium",
         "language": "en",
         "device": "auto",
         "video_width": 1920,
         "video_height": 1080,
-        "song_name": "Wildflower",
-        "artist_name": "Billie Eilish",
+        "song_name": "Round and Round",
+        "artist_name": "Imagine Dragons",
+        "metadata_language": "en",
+        "youtube_upload": true,
+        "privacy_status": "public"
+    },
+    {
+        "folder_name": "shots",
+        "youtube_url": "https://www.youtube.com/watch?v=Tni74ocFxtQ&list=RDTni74ocFxtQ&start_radio=1",
+        "model": "medium",
+        "language": "en",
+        "device": "auto",
+        "video_width": 1920,
+        "video_height": 1080,
+        "song_name": "Shots",
+        "artist_name": "Imagine Dragons",
         "metadata_language": "en",
         "youtube_upload": true,
         "privacy_status": "public"

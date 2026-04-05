@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(source .venv/bin/activate)",
+      "Bash(pip list:*)",
+      "Bash(source /Users/egeergul/Desktop/audio_scraper/.venv/bin/activate)"
+    ]
+  }
+}
