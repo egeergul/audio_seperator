@@ -157,24 +157,31 @@ def _run_single(config: dict[str, Any], index: int, total: int) -> None:
     if metadata_language is None or not metadata_language.strip():
         raise ValueError("Field 'metadata_language' cannot be empty.")
 
+    youtube_upload = config.get("youtube_upload", False)
+    if not isinstance(youtube_upload, bool):
+        raise ValueError("Field 'youtube_upload' must be a boolean.")
+    privacy_status = _get_optional_str(config, "privacy_status", default="private")
+    if privacy_status is None:
+        privacy_status = "private"
+
     if total > 1:
         print(f"\n=== Run {index}/{total} ===")
 
-    print("\nStep 1/6: Create run folder")
+    print("\nStep 1/7: Create run folder")
     run_dir = create_normalized_run_folder(raw_folder_name)
     run_name = run_dir.name
     print(f"Created: {run_dir}")
 
-    print("\nStep 2/6: Download audio")
+    print("\nStep 2/7: Download audio")
     original_audio_path = download_youtube_audio(youtube_url, run_dir)
     print(f"Downloaded: {original_audio_path}")
 
-    print("\nStep 3/6: Separate vocals and kareoke")
+    print("\nStep 3/7: Separate vocals and kareoke")
     vocals_path, kareoke_path = seperate_audio(original_audio_path)
     print(f"Vocals:  {vocals_path}")
     print(f"Kareoke: {kareoke_path}")
 
-    print("\nStep 4/6: Transcribe vocals")
+    print("\nStep 4/7: Transcribe vocals")
     transcription_payload = transcribe_audio(
         audio_path=vocals_path,
         model_name=model_name,
@@ -184,7 +191,7 @@ def _run_single(config: dict[str, Any], index: int, total: int) -> None:
     transcription_path = write_transcription_json(vocals_path, transcription_payload)
     print(f"Transcription: {transcription_path}")
 
-    print("\nStep 5/6: Create lyric videos (kareoke + vocals)")
+    print("\nStep 5/7: Create lyric videos (kareoke + vocals)")
     kareoke_video_spec = build_video_spec(
         transcription_path=transcription_path,
         mux_audio_path=kareoke_path,
@@ -204,7 +211,7 @@ def _run_single(config: dict[str, Any], index: int, total: int) -> None:
     # print(f"Kareoke video: {kareoke_video_path}")
     print(f"Vocals video:  {vocals_video_path}")
 
-    print("\nStep 6/6: Create vocals video metadata")
+    print("\nStep 6/7: Create vocals video metadata")
     metadata_path = create_video_metadata_for_vocals(
         vocals_audio_path=vocals_path,
         song_name=song_name,
@@ -212,6 +219,20 @@ def _run_single(config: dict[str, Any], index: int, total: int) -> None:
         language=metadata_language,
     )
     print(f"Video metadata: {metadata_path}")
+
+    if youtube_upload:
+        print("\nStep 7/7: Upload vocals video to YouTube")
+        from services.youtube_upload import upload_video_to_youtube
+
+        video_id = upload_video_to_youtube(
+            video_file_path=vocals_video_path,
+            metadata_text_path=metadata_path,
+            privacy_status=privacy_status,
+        )
+        print(f"YouTube video ID: {video_id}")
+        print(f"YouTube URL: https://www.youtube.com/watch?v={video_id}")
+    else:
+        print("\nStep 7/7: YouTube upload skipped (youtube_upload not set)")
 
     print("\nPipeline completed successfully.")
     print(f"Run name: {run_name}")

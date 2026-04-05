@@ -1,98 +1,16 @@
 [
     {
-        "folder_name": "back to friends",
-        "youtube_url": "https://www.youtube.com/watch?v=c8zq4kAn_O0&list=RDc8zq4kAn_O0&start_radio=1",
+        "folder_name": "wildflower",
+        "youtube_url": "https://www.youtube.com/watch?v=ahuwiki7G5g&list=RDahuwiki7G5g&start_radio=1",
         "model": "medium",
         "language": "en",
         "device": "auto",
         "video_width": 1920,
         "video_height": 1080,
-        "song_name": "Back to Friends",
-        "artist_name": "sombr",
-        "metadata_language": "en"
-    },
-    {
-        "folder_name": "sweater weather",
-        "youtube_url": "https://www.youtube.com/watch?v=GCdwKhTtNNw&list=RDGCdwKhTtNNw&start_radio=1",
-        "model": "medium",
-        "language": "en",
-        "device": "auto",
-        "video_width": 1920,
-        "video_height": 1080,
-        "song_name": "Sweater Weather",
-        "artist_name": "The Neighbourhood",
-        "metadata_language": "en"
-    },
-    {
-        "folder_name": "as it was",
-        "youtube_url": "https://www.youtube.com/watch?v=H5v3kku4y6Q&list=RDH5v3kku4y6Q&start_radio=1",
-        "model": "medium",
-        "language": "en",
-        "device": "auto",
-        "video_width": 1920,
-        "video_height": 1080,
-        "song_name": "As It Was",
-        "artist_name": "Harry Styles",
-        "metadata_language": "en"
-    },
-    {
-        "folder_name": "somebody that i used to know",
-        "youtube_url": "https://www.youtube.com/watch?v=Vs2g3m-VvSc&list=RDVs2g3m-VvSc&start_radio=1",
-        "model": "medium",
-        "language": "en",
-        "device": "auto",
-        "video_width": 1920,
-        "video_height": 1080,
-        "song_name": "Somebody That I Used to Know",
-        "artist_name": "Gotye ft. Kimbra",
-        "metadata_language": "en"
-    },
-    {
-        "folder_name": "back to black",
-        "youtube_url": "https://www.youtube.com/watch?v=AL-nv-7TIws&list=RDAL-nv-7TIws&start_radio=1",
-        "model": "medium",
-        "language": "en",
-        "device": "auto",
-        "video_width": 1920,
-        "video_height": 1080,
-        "song_name": "Back to Black",
-        "artist_name": "Amy Winehouse",
-        "metadata_language": "en"
-    },
-    {
-        "folder_name": "505",
-        "youtube_url": "https://www.youtube.com/watch?v=ozv8ugNm0P0&list=RDozv8ugNm0P0&start_radio=1",
-        "model": "medium",
-        "language": "en",
-        "device": "auto",
-        "video_width": 1920,
-        "video_height": 1080,
-        "song_name": "505",
-        "artist_name": "Arctic Monkeys",
-        "metadata_language": "en"
-    },
-    {
-        "folder_name": "chamber of reflection",
-        "youtube_url": "https://www.youtube.com/watch?v=8MuhFxaT7zo&list=RD8MuhFxaT7zo&start_radio=1",
-        "model": "medium",
-        "language": "en",
-        "device": "auto",
-        "video_width": 1920,
-        "video_height": 1080,
-        "song_name": "Chamber of Reflection",
-        "artist_name": "Mac DeMarco",
-        "metadata_language": "en"
-    },
-    {
-        "folder_name": "space song",
-        "youtube_url": "https://www.youtube.com/watch?v=WjqYTpE6Qdg&list=RDWjqYTpE6Qdg&start_radio=1",
-        "model": "medium",
-        "language": "en",
-        "device": "auto",
-        "video_width": 1920,
-        "video_height": 1080,
-        "song_name": "Space Song",
-        "artist_name": "Beach House",
-        "metadata_language": "en"
+        "song_name": "Wildflower",
+        "artist_name": "Billie Eilish",
+        "metadata_language": "en",
+        "youtube_upload": true,
+        "privacy_status": "public"
     }
 ]

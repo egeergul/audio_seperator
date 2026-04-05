@@ -8,3 +8,5 @@ models/
 third_party/
 _archive_third_party/
 .released/
+client_secrets.json
+youtube_token.json
